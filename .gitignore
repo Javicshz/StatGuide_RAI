@@ -1,0 +1,43 @@
+.DS_Store
+.Rhistory
+.RData
+.Ruserdata
+.Renviron
+.Rprofile
+
+# Credentials and local secrets
+*.key
+*.pem
+*.token
+secrets/
+credentials/
+.env
+.env.*
+
+# R and package build artifacts
+*.Rproj.user/
+packrat/lib*/
+renv/library/
+renv/staging/
+*.tar.gz
+*.Rcheck/
+
+# Shiny and runtime artifacts
+rsconnect/
+shiny_bookmarks/
+logs/
+tmp/
+cache/
+
+# Local model files can be very large and should not be committed by default
+models/
+*.gguf
+*.safetensors
+
+# Local planning, research, and migration artifacts
+ROADMAP.md
+PROGRESS.md
+DECISIONS.md
+PROJECT-INVENTORY.md
+RESEARCH-NOTES.md
+legacy/
