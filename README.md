@@ -2,9 +2,12 @@
 
 StatGuide R AI is a Shiny app for working through statistics problems, checking formulas, using calculators and getting help with R code. I built it to be the kind of app I would want open while studying, doing homework, reviewing stats concepts or trying to remember how to write the right R command.
 
-This project started from a program I made for my STAT411 class. At first it was mostly a calculator app but I kept adding more and more to it as I went through the class. Eventually it turned into a place for my statistics notes, R code notes, formulas, examples and step-by-step problem help.
+This project started from a program I made for my STAT411 class. At first it was a large file full of all my R code and notes. I learned about Shiny and realized I could make a GUI app out of my notes. It started as a calculator app but I kept adding more and more to it as I went through the class. Eventually it turned into something I figured could be useful for others.
 
 After the class was over, I decided to clean it up and redesign it into something more general that could be useful outside of one class. I also started adding AI features, like using Codex CLI from the RStudio workflow, because AI tools are becoming a normal part of programming and data work. The AI part is optional though. The main purpose of the app is still to be a statistics calculator, guide, and R helper.
+
+* This redesign was mainly done using OpenAI's Codex. I wanted this version of the project to be an example of my ability to build something useful with AI through proper prompting. My GitHub is mainly here to showcase my software development skills but with the job market moving more toward AI assisted development, I also wanted to show that I know how to use AI as a tool to build real software, not just generate code.
+
 
 ## What It Does
 
