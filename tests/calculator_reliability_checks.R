@@ -290,4 +290,66 @@ expect_error("gof rejects probability sum", env$chiSqGoodnessFit(c(10, 20), expe
 expect_error("chi-square rejects one-row table", env$chiSqIndependence(matrix(c(1, 2), nrow = 1)), "at least 2 rows and 2 columns")
 expect_error("chi-square rejects negative count", env$chiSqHomogeneity(matrix(c(1, -2, 3, 4), nrow = 2)), "nonnegative")
 
+for (fn in c(
+  "binomialDistribution", "poissonDistribution", "hypergeometricDistribution",
+  "normalProb", "sampleMeanProb", "corrReg", "meanTTest",
+  "onePropTest", "twoIndSampleProp", "chiSqIndependence"
+)) {
+  ref <- env$calculator_reference(fn)
+  check(paste("calculator reference use exists for", fn), nzchar(ref$use))
+  check(paste("calculator reference code exists for", fn), nzchar(ref$code))
+}
+all_calculator_ids <- unique(unname(env$function_choices))
+all_calculator_refs <- lapply(all_calculator_ids, env$calculator_reference)
+all_reference_examples <- vapply(all_calculator_refs, `[[`, character(1), "example")
+all_reference_uses <- vapply(all_calculator_refs, `[[`, character(1), "use")
+check("every calculator has a specific quick reference",
+      !any(all_reference_examples == "Match the problem wording to the calculator name and fill only the boxes the problem gives."))
+check("calculator quick reference use text is unique by calculator",
+      length(unique(all_reference_uses)) == length(all_reference_uses))
+
+check("examples include one numeric sample method choice",
+      any(env$example_guides$title == "One Numeric Sample"))
+check("examples include object not found R help",
+      any(env$example_guides$title == "Object Not Found"))
+check("examples removed student portfolio option",
+      !any(env$example_guides$title == "Student Portfolio Plan"))
+check("examples removed shiny input output option",
+      !any(env$example_guides$title == "Shiny Input/Output"))
+check("examples removed broad database query option",
+      !any(env$example_guides$title == "Database Query"))
+check("search includes paired method choice",
+      any(env$search_guides$label == "Method Choice - Paired Before/After Numeric Data"))
+check("search includes join row count changed R help",
+      any(env$search_guides$label == "R Code Help - Join Row Count Changed"))
+check("search removed student pathway options",
+      !any(grepl("Student Pathway|portfolio|career|resume", env$search_guides$label, ignore.case = TRUE)))
+formatted_example <- env$format_example_code("n <- 21; xbar <- 6.4; s <- 1.1; conf <- .99\nalpha <- 1 - conf")
+check("example code semicolon assignments split", grepl("xbar <- 6.4\ns <- 1.1", formatted_example, fixed = TRUE))
+check("concept markup helper exists", is.function(env$render_concept_items))
+check("formula markup helper exists", is.function(env$render_formula_items))
+check("markdownish helper exists", is.function(env$render_markdownish))
+check("content format plan exists", exists("content_format_plan", envir = env) && length(env$content_format_plan) >= 4)
+concept_markup <- paste(as.character(env$render_concept_items(c(
+  "Population: the entire group being studied.",
+  "Qualitative data are categories or labels.",
+  "Always interpret intervals in context."
+))), collapse = "\n")
+formula_markup <- paste(as.character(env$render_formula_items(c(
+  "Mean: xbar = sum(x) / n",
+  "Standard deviation = sqrt(variance)",
+  "Use the matching calculator for conceptual topics."
+))), collapse = "\n")
+check("concept rendering uses natural concept list", grepl("concept-list-clean", concept_markup, fixed = TRUE))
+check("concept rendering keeps unlabeled prose plain", grepl("concept-prose", concept_markup, fixed = TRUE))
+check("concept rendering does not bold terms", !grepl("<strong", concept_markup, fixed = TRUE))
+check("concept rendering does not use concept term class", !grepl("concept-term", concept_markup, fixed = TRUE))
+check("formula rendering uses shared rows", grepl("reference-row formula-row", formula_markup, fixed = TRUE))
+check("formula rendering keeps neutral equation class", grepl("formula-equation-inline", formula_markup, fixed = TRUE))
+ui_text <- paste(as.character(env$ui), collapse = "\n")
+check("examples tab hidden from main navigation", !grepl(">Examples<", ui_text, fixed = TRUE))
+check("concept bold term class removed", !grepl("concept-term", ui_text, fixed = TRUE))
+server_reference_text <- paste(readLines("R/server_reference.R", warn = FALSE), collapse = "\n")
+check("formula to concept link exists", grepl("Read related concept", server_reference_text, fixed = TRUE))
+
 cat("Calculator reliability checks passed\n")

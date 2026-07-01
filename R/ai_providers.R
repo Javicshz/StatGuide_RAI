@@ -8,7 +8,6 @@
 
 ai_provider_choices <- c(
   "Manual / prompt only" = "none",
-  "Local mock provider for testing" = "mock",
   "Codex CLI (local)" = "codex_cli",
   "OpenAI-compatible API" = "openai",
   "Claude / Anthropic API" = "anthropic",
@@ -27,13 +26,11 @@ ai_task_choices <- c(
   "Import, clean, or validate data" = "import_clean",
   "Write tidyverse transformations" = "tidyverse",
   "Build a visualization or EDA plan" = "viz_eda",
-  "Work with SQL, databases, or data pipelines" = "data_engineering",
   "Create a Quarto report or notebook" = "quarto",
   "Develop R functions, packages, or tests" = "package_test",
   "Build or debug a Shiny app" = "shiny_help",
   "Plan modeling or machine learning in R" = "modeling",
-  "Handle large data or performance issues" = "big_data",
-  "Plan a student portfolio or learning path" = "student_path"
+  "Handle large data or performance issues" = "big_data"
 )
 
 ai_task_tip <- function(task) {
@@ -47,14 +44,149 @@ ai_task_tip <- function(task) {
     import_clean = "Include the file type, column names, suspicious values, missing-value rules, and what the cleaned data should look like.",
     tidyverse = "Describe the starting data frame, desired output table, grouping variables, joins, and whether dplyr/tidyr are allowed.",
     viz_eda = "List the variables, their types, the comparison or pattern you want to see, and the audience for the plot.",
-    data_engineering = "Include the data source, table relationships, keys, desired query result, size constraints, and whether SQL or R should do the work.",
     quarto = "Describe the report audience, output format, sections needed, code chunks, parameters, and reproducibility requirements.",
     package_test = "Include the repeated code pattern, expected inputs/outputs, edge cases, and what behavior should be tested.",
     shiny_help = "Paste the UI/server code, input/output IDs, exact warning/error, and the interaction that should happen.",
     modeling = "Name the outcome, predictors, prediction/explanation goal, train/test plan, metrics, and assumptions or fairness concerns.",
     big_data = "Include the data size, format, memory symptoms, slow step, and whether a database, Arrow, DuckDB, or sampling is available.",
-    student_path = "Describe the learner level, target role, class/trade-school/university context, available time, and portfolio goal.",
     "Include enough context for the AI to identify the statistical task."
+  )
+}
+
+ai_task_answer_requirements <- function(task) {
+  common <- c(
+    "- Do not invent data, variables, package output, or hidden assumptions.",
+    "- If information is missing, ask concise follow-up questions before giving a final recommendation.",
+    "- When giving R code, keep it reproducible and explain what the user should replace."
+  )
+
+  task_specific <- switch(task,
+    method = c(
+      "- Identify the response variable and explanatory variable, if they are provided.",
+      "- Classify each variable as numeric or categorical.",
+      "- Decide whether the design is one-sample, two independent samples, paired samples, or a table/count problem.",
+      "- Recommend the most likely calculator/formula/R function and explain why.",
+      "- List the assumptions or conditions to check before trusting the method."
+    ),
+    concept = c(
+      "- Start with a plain-language definition.",
+      "- Explain the intuition and why the concept works.",
+      "- Include the important formula, if one applies.",
+      "- Give a small example and connect it to R when useful.",
+      "- Mention common mistakes or wording traps."
+    ),
+    generate_r = c(
+      "- Provide runnable R code first, then briefly explain it.",
+      "- Prefer base R unless the user asks for tidyverse or another package.",
+      "- Include placeholder data frame and column names only when the user did not provide names.",
+      "- Avoid installing packages unless the user asks for package setup.",
+      "- Include checks such as str(), summary(), names(), or head() when helpful."
+    ),
+    debug_r = c(
+      "- Identify the most likely cause of the error.",
+      "- Show the smallest corrected code example.",
+      "- Explain how to inspect the object, column names, package loading, and data types.",
+      "- Give a checklist the user can run in RStudio.",
+      "- Avoid rewriting the whole project unless the issue requires it."
+    ),
+    interpret = c(
+      "- Translate the output into plain English.",
+      "- State the decision rule when a P-value, alpha, or confidence interval is involved.",
+      "- Include the parameter, population/context, direction of evidence, and practical limitation.",
+      "- Avoid saying that a non-significant result proves no effect.",
+      "- Mention assumptions that could weaken the interpretation."
+    ),
+    workflow = c(
+      "- Break the analysis into steps: import, inspect, clean, explore, model/test, verify, report.",
+      "- Name the R packages or base R functions that fit each step.",
+      "- Include checkpoints for missing values, data types, duplicates, and outliers.",
+      "- Suggest a simple deliverable such as a table, chart, report, or app output.",
+      "- Keep the plan realistic for an RStudio workflow."
+    ),
+    import_clean = c(
+      "- Start by inspecting names, dimensions, types, missing values, and duplicate rows.",
+      "- Provide R code for import and cleaning.",
+      "- Explain how to handle text numbers, dates, inconsistent labels, and impossible values.",
+      "- Preserve raw data and create a cleaned object rather than overwriting immediately.",
+      "- Include validation checks after cleaning."
+    ),
+    tidyverse = c(
+      "- Use clear dplyr/tidyr code with pipes.",
+      "- Explain grouping, summarizing, filtering, joining, and reshaping steps.",
+      "- Include row-count checks for joins.",
+      "- Avoid many-to-many joins unless they are intentional.",
+      "- Show the expected shape of the output."
+    ),
+    viz_eda = c(
+      "- Choose plot types based on variable types.",
+      "- Suggest quick exploratory summaries before final charts.",
+      "- Provide ggplot2 code when helpful.",
+      "- Explain what pattern, comparison, or outlier the chart is meant to reveal.",
+      "- Mention chart limitations or possible misleading choices."
+    ),
+    quarto = c(
+      "- Suggest a report outline with sections.",
+      "- Include a minimal Quarto chunk structure.",
+      "- Separate narrative, code, output, and limitations.",
+      "- Mention reproducibility steps such as relative paths and session/package notes.",
+      "- Keep the report readable for the intended audience."
+    ),
+    package_test = c(
+      "- Turn repeated script logic into a small function.",
+      "- Define inputs, outputs, and edge cases.",
+      "- Include testthat examples when useful.",
+      "- Keep functions small and predictable.",
+      "- Avoid unnecessary package structure unless the user asks for a package."
+    ),
+    shiny_help = c(
+      "- Identify whether the issue is UI, server, reactive flow, input ID mismatch, or output rendering.",
+      "- Give a minimal corrected Shiny example.",
+      "- Explain reactive dependencies and when to use render*, observeEvent, reactive, or req.",
+      "- Suggest validation messages for bad inputs.",
+      "- Keep calculation logic separate from UI where practical."
+    ),
+    modeling = c(
+      "- Clarify whether the goal is prediction, explanation, or inference.",
+      "- Identify outcome type and predictor types.",
+      "- Suggest train/test split, resampling, metrics, and leakage checks.",
+      "- Include baseline model and interpretation cautions.",
+      "- Avoid claiming model performance without test results."
+    ),
+    big_data = c(
+      "- Diagnose whether the bottleneck is file size, memory, computation, or joins.",
+      "- Suggest sampling, column selection, chunking, database queries, DuckDB, Arrow, or parquet when relevant.",
+      "- Avoid collecting full data into memory unless necessary.",
+      "- Include performance checks and a smaller reproducible test.",
+      "- Mention tradeoffs clearly."
+    ),
+    c(
+      "- State the recommended method or R approach.",
+      "- Explain why it fits and which assumptions must be checked.",
+      "- Provide reproducible R code when code is helpful.",
+      "- If interpreting results, include practical context and limitations."
+    )
+  )
+
+  unique(c(task_specific, common))
+}
+
+ai_task_context_prompt <- function(task) {
+  switch(task,
+    method = "Helpful details: response variable, explanatory variable, variable types, number of groups, paired vs independent samples, sample size, and exact problem wording.",
+    concept = "Helpful details: topic name, formula or vocabulary causing confusion, class/work context, and whether an R example would help.",
+    generate_r = "Helpful details: data frame name, column names, desired output, preferred packages, and a tiny example of the data shape.",
+    debug_r = "Helpful details: exact error text, code that caused it, object names, package calls, str() output, and what you expected to happen.",
+    interpret = "Helpful details: calculator/R output, alpha or confidence level, original claim/question, variable meanings, and study context.",
+    workflow = "Helpful details: data source, variables, question, cleaning needs, analysis goal, audience, and final deliverable.",
+    import_clean = "Helpful details: file type, column names, bad values, missing-value rules, duplicate rules, and what clean data should look like.",
+    tidyverse = "Helpful details: starting table, desired table, grouping variables, join keys, row count expectations, and package preference.",
+    viz_eda = "Helpful details: variable names and types, comparison goal, chart audience, and whether the plot is exploratory or final.",
+    quarto = "Helpful details: report audience, output format, sections, figures/tables, code chunks, and reproducibility needs.",
+    package_test = "Helpful details: repeated code, desired function behavior, valid inputs, invalid inputs, and expected outputs.",
+    shiny_help = "Helpful details: UI code, server code, input/output IDs, exact warning/error, and the interaction that should happen.",
+    modeling = "Helpful details: outcome, predictors, row count, goal, train/test plan, metrics, leakage risks, and fairness concerns.",
+    big_data = "Helpful details: data size, file format, slow step, memory error, available tools, and whether sampling is acceptable.",
+    "Helpful details: problem wording, data summary, current code, output, and what you want to happen next."
   )
 }
 
@@ -68,15 +200,6 @@ ai_provider_summary <- function(provider, model, endpoint, key_env, local_app) {
       "Mode: The app prepares a structured prompt for use in the AI tool of your choice.",
       "Direct answer: Not available until a provider is selected.",
       "Data sharing: Nothing leaves this app from the AI tab in this mode."
-    ))
-  }
-
-  if (provider == "mock") {
-    return(c(
-      "Status: Local mock provider enabled.",
-      "Mode: The app returns a deterministic local test response without calling any AI service.",
-      "Direct answer: Available for testing UI flow only.",
-      "Data sharing: Nothing leaves this app."
     ))
   }
 
@@ -137,8 +260,10 @@ build_ai_prompt <- function(task, question, context, provider, allow_external) {
   task_label <- names(ai_task_choices)[match(task, ai_task_choices)]
   if (is.na(task_label)) task_label <- "General statistics/R help"
 
-  data_policy <- if (isTRUE(allow_external)) {
-    "The user has indicated this prompt may be sent to the selected provider after real provider support is implemented."
+  data_policy <- if (isTRUE(allow_external) && provider %in% c("codex_cli", "claude_code_cli", "ollama")) {
+    "The user has indicated this prompt may be sent to the selected local provider or CLI tool."
+  } else if (isTRUE(allow_external)) {
+    "The user has indicated this prompt may be sent to the selected provider."
   } else {
     "Do not send this prompt to an online provider. Keep it local or copy it manually after reviewing sensitive data."
   }
@@ -147,10 +272,12 @@ build_ai_prompt <- function(task, question, context, provider, allow_external) {
 
   paste(
     "You are helping with statistics, data analysis, and R code inside an RStudio workflow.",
+    "The app is primarily a statistics calculator, guide, and R helper. AI support is optional and should support that workflow.",
     "",
     paste("Task:", task_label),
     paste("Provider mode:", provider_label),
     paste("Data policy:", data_policy),
+    paste("Context checklist:", ai_task_context_prompt(task)),
     "",
     "User question:",
     ifelse(nzchar(trimws(question)), trimws(question), "[No question entered yet]"),
@@ -159,12 +286,7 @@ build_ai_prompt <- function(task, question, context, provider, allow_external) {
     ifelse(nzchar(trimws(context)), trimws(context), "[No extra context provided]"),
     "",
     "Answer requirements:",
-    "- State the recommended method or R approach.",
-    "- Explain why it fits and which assumptions must be checked.",
-    "- Provide reproducible R code when code is helpful.",
-    "- Do not invent data or hidden assumptions.",
-    "- If information is missing, ask concise follow-up questions.",
-    "- If interpreting results, include practical context and limitations.",
+    paste(ai_task_answer_requirements(task), collapse = "\n"),
     sep = "\n"
   )
 }
@@ -177,35 +299,6 @@ ai_provider_settings <- function(provider, model, endpoint, key_env, local_app, 
     key_env = key_env %||% "",
     local_app = local_app %||% "",
     allow_external = isTRUE(allow_external)
-  )
-}
-
-ai_mock_answer <- function(task, question, context, prompt) {
-  question_text <- trimws(question)
-  if (!nzchar(question_text)) {
-    question_text <- "No question was provided."
-  }
-
-  task_label <- names(ai_task_choices)[match(task, ai_task_choices)]
-  if (is.na(task_label)) task_label <- "General statistics/R help"
-
-  paste(
-    "Mock AI response (local test mode)",
-    "",
-    paste("Task:", task_label),
-    "",
-    "What I would do next:",
-    paste("- Clarify the goal:", question_text),
-    "- Identify the data type, response variable, explanatory variables, sample size, and grouping structure.",
-    "- Choose the R workflow or statistical method based on those details.",
-    "- Provide reproducible R code and ask you to verify assumptions before trusting the result.",
-    "",
-    "Suggested next prompt improvement:",
-    ai_task_tip(task),
-    "",
-    "Safety note:",
-    "This is a deterministic local test response. It proves the app can route and display direct AI-style responses, but it is not a real model answer yet.",
-    sep = "\n"
   )
 }
 
@@ -323,35 +416,6 @@ ai_ollama_model_names <- function(endpoint = "") {
     status = "ollama_models_loaded",
     message = result$message,
     models = result$models %||% character(0)
-  )
-}
-
-ai_ollama_delete_model <- function(model, endpoint = "") {
-  model <- trimws(model %||% "")
-  if (!nzchar(model)) {
-    return(list(
-      ok = FALSE,
-      status = "ollama_delete_missing_model",
-      message = "Choose an installed Ollama model before deleting."
-    ))
-  }
-
-  result <- ai_ollama_request(
-    "/api/delete",
-    method = "POST",
-    body = list(model = model),
-    endpoint = endpoint,
-    timeout = 60
-  )
-
-  if (!isTRUE(result$ok)) {
-    return(result)
-  }
-
-  list(
-    ok = TRUE,
-    status = "ollama_model_deleted",
-    message = paste("Deleted Ollama model:", model)
   )
 }
 
@@ -534,7 +598,7 @@ ai_openai_generate <- function(prompt, settings) {
   body <- list(
     model = model,
     messages = list(
-      list(role = "system", content = "You are a careful statistics, R, data science, and data engineering assistant inside an RStudio workflow. Be accurate, explicit about assumptions, and provide reproducible R code when useful."),
+      list(role = "system", content = "You are a careful statistics, data analysis, and R code assistant inside an RStudio workflow. Be accurate, explicit about assumptions, and provide reproducible R code when useful."),
       list(role = "user", content = prompt)
     ),
     temperature = 0.2
@@ -695,7 +759,7 @@ ai_anthropic_generate <- function(prompt, settings) {
   body <- list(
     model = model,
     max_tokens = 2000,
-    system = "You are a careful statistics, R, data science, and data engineering assistant inside an RStudio workflow. Be accurate, explicit about assumptions, and provide reproducible R code when useful.",
+    system = "You are a careful statistics, data analysis, and R code assistant inside an RStudio workflow. Be accurate, explicit about assumptions, and provide reproducible R code when useful.",
     messages = list(
       list(role = "user", content = prompt)
     )
@@ -911,17 +975,9 @@ send_ai_request <- function(prompt, task, question, context, settings) {
       message = paste(
         "Manual prompt-only mode is selected.",
         "The app prepared the prompt, but no direct AI provider is configured yet.",
-        "Choose the local mock provider to test direct-answer UI flow, or configure a real provider after provider adapters are implemented.",
+        "Choose a configured local or online provider to request a direct answer.",
         sep = "\n"
       )
-    ))
-  }
-
-  if (provider == "mock") {
-    return(list(
-      ok = TRUE,
-      status = "mock_response",
-      message = ai_mock_answer(task, question, context, prompt)
     ))
   }
 

@@ -13,38 +13,66 @@ After the class was over, I decided to clean it up and redesign it into somethin
 
 - Gives calculator-style help for common statistics problems.
 - Helps with descriptive statistics, probability, confidence intervals, hypothesis tests, regression, and related topics.
-- Provides concepts, definitions, formulas, examples, and search guidance.
+- Provides concepts, definitions, formulas, calculator quick references, and search guidance.
 - Helps generate or review R code for common statistics and data analysis tasks.
 - Includes an optional Ask AI workflow for statistics questions, R code help, debugging, and interpretation.
-- Supports local/desktop AI workflows such as Codex CLI and Ollama, with planned support for other providers.
+- Supports tested local/desktop AI workflows such as Codex CLI and Ollama, with additional provider options included as works in progress.
 
 ## Examples
 
 Here are a few screenshots showing what the app currently looks like.
 
+### Ask AI
+
+The Ask AI tab helps prepare better prompts for statistics, R code, debugging, interpretation, and workflow planning. It can still be used in manual prompt-only mode if no AI provider is connected.
+
+![Ask AI dark theme example](screenshots/ask-ai-dark.png)
+
 ### Calculator Example
 
 The calculators are meant to help work through common stats problems with inputs, output, quick reference notes, and R code guidance.
 
-![Calculator example](screenshots/calculator_example.png)
+![Calculator dark theme example](screenshots/calculator-dark.png)
 
 ### Concepts And Definitions
 
 The guide sections give quick explanations and reminders for statistics topics, so the app can work as a study/reference tool too.
 
-![Concepts and definitions example](screenshots/Concepts_example.png)
+![Concepts and definitions dark theme example](screenshots/concepts-dark.png)
 
 ### Formula Reference
 
 The formulas tab keeps important formulas and simple R code templates in one place.
 
-![Formula example](screenshots/Formula_example.png)
+![Formula reference dark theme example](screenshots/formulas-dark.png)
+
+### Search Helper
+
+The search helper lets you type problem wording and jump toward the calculator or reference topic that is most likely to fit.
+
+![Search helper dark theme example](screenshots/search-helper-dark.png)
 
 ### Optional AI Helper
 
 The Ask AI tab can help with R code, debugging, statistics explanations, and interpretation when a supported provider is connected. This screenshot shows an Ollama response.
 
-![Ollama AI helper example](screenshots/Ollama_example.png)
+![Ollama AI helper dark theme example](screenshots/ollama-response-dark.png)
+
+### RStudio Console AI Helpers
+
+The AI-only console entry point loads direct helper functions such as `codex()`, `ollama()`, `openai()`, and `anthropic()` without opening the full menu. This is useful when I just want to ask for R code directly from the RStudio Console.
+
+![RStudio console Codex helper example](screenshots/console-ai-codex.png)
+
+The Ollama helper can also guide setup by listing installed local models and asking which one to use.
+
+![RStudio console Ollama setup example](screenshots/console-ollama-setup.png)
+
+### RStudio Console Menu
+
+The console menu version gives numbered access to calculators, concepts, formulas, search helper, and Ask AI inside the RStudio Console.
+
+![RStudio console menu formula example](screenshots/console-menu-formulas.png)
 
 ## AI Provider Status
 
@@ -62,11 +90,11 @@ These provider options are included in the app, but I have not personally tested
 - Anthropic/Claude API
 - Other external API providers
 
-Those API/provider options should be treated as works in progress until they can be tested with real accounts and keys.
+Those API/provider options should be treated as works in progress.
 
 ## Project Status
 
-This project is still in active development. The app runs locally, the calculator and reference sections are being improved, and the AI provider options are being built out as I test what I have access to.
+This project is still in active development. The app runs locally, the calculators, search helper, formulas, and concepts/reference sections are working, and the AI provider options are being built out as I test what I have access to.
 
 ## Requirements
 
@@ -82,11 +110,69 @@ install.packages("shiny")
 
 ## Run The App
 
-Open `app.R` in RStudio/Posit and click **Run App**, or run:
+There are three local entry points:
+
+- `app.R` opens the Shiny GUI app.
+- `run_console.R` opens the numbered RStudio Console menu with calculators, references, search, and Ask AI.
+- `run_ai.R` loads only the AI console helpers, including local CLI, Ollama, and API helper functions.
+
+For the GUI app, open `app.R` in RStudio/Posit and click **Run App**, or run:
 
 ```r
 shiny::runApp()
 ```
+
+## RStudio Console Versions
+
+To open the full console menu open the file run_console.R and source the file or run:
+
+```r
+source("run_console.R")
+```
+
+This starts the numbered menu automatically in an interactive RStudio Console session.
+
+To load only the AI helpers open the file run_ai.R and source the file or run:
+
+```r
+source("run_ai.R")
+```
+
+Then call a local provider directly:
+
+```r
+codex("Provide the R code for a Poisson probability problem with lambda 2 and x 3.")
+ollama("Explain Poisson lambda in R.")
+```
+
+If a console helper needs setup, it will prompt you through the missing pieces. For example, `ollama()` can list installed local Ollama models when Ollama is running, and API helpers ask for model names, endpoints, environment variable names, and explicit send confirmation. The AI app must be open in the background for it to work.
+
+Available console AI helpers include:
+
+- `codex()` / `askcodex()` for Codex CLI.
+- `ollama()` / `askollama()` for a local Ollama model. `Ollama()` also works as a capitalized alias.
+- `claude()` / `askclaude()` for Claude Code CLI.
+- `openai()` for OpenAI-compatible API calls.
+- `anthropic()` for Anthropic/Claude API calls.
+- `openai_compatible()` for a custom OpenAI-compatible endpoint.
+- `askai()` for choosing any supported provider manually.
+- `ai_setup_help()` for setup reminders.
+
+For API providers, do not paste API keys into the app or into project files. Set keys outside the project, such as in your user `.Renviron` file, then pass only the environment variable name:
+
+```r
+openai("Explain a one-sample t interval.", model = "gpt-model-name", allow_external = TRUE)
+
+openai_compatible(
+  "Write R code for a mean confidence interval.",
+  model = "model-name",
+  endpoint = "https://your-provider.example/v1",
+  key_env = "OPENAI_API_KEY",
+  allow_external = TRUE
+)
+```
+
+The console menu also has an Ask AI option with provider choices. Online providers require a typed confirmation before sending.
 
 ## AI Provider Setup
 
@@ -102,6 +188,7 @@ From the project folder, run:
 Rscript tests/baseline_checks.R
 Rscript tests/calculator_reliability_checks.R
 Rscript tests/ai_provider_checks.R
+Rscript tests/console_checks.R
 ```
 
 ## Privacy And Safety

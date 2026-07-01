@@ -19,6 +19,7 @@ get_app_folder <- function() {
 app_dir <- get_app_folder()
 source(file.path(app_dir, "R", "statistics_core.R"), local = .GlobalEnv)
 source(file.path(app_dir, "R", "ai_providers.R"), local = .GlobalEnv)
+source(file.path(app_dir, "R", "console_ai.R"), local = .GlobalEnv)
 
 source(file.path(app_dir, "R", "calculator_helpers.R"), local = environment())
 source(file.path(app_dir, "R", "content_data.R"), local = environment())

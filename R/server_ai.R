@@ -46,10 +46,8 @@ register_ai_server <- function(input, output, session) {
         actionButton("ai_refresh_ollama_models", "Refresh Ollama Models"),
         selectInput("ai_ollama_model", "Installed Ollama model", choices = choices),
         textInput("ai_ollama_manual_model", "Manual model name", "", placeholder = "Example: llama3.1"),
-        checkboxInput("ai_confirm_delete_ollama_model", "I understand deleting removes the selected local model", FALSE),
-        actionButton("ai_delete_ollama_model", "Delete Selected Ollama Model"),
         verbatimTextOutput("ai_ollama_model_status"),
-        tags$div(class = "formula-note", "Deleting a model removes it from local Ollama storage on this computer.")
+        tags$div(class = "formula-note", "Model management should be done directly in Ollama. This app only lists and uses installed models.")
       ))
     }
 
@@ -83,13 +81,6 @@ register_ai_server <- function(input, output, session) {
       ))
     }
 
-    if (provider == "mock") {
-      return(tags$div(
-        class = "reference-box",
-        tags$p("The local mock provider is ready. It does not need model, endpoint, or credential settings.")
-      ))
-    }
-
     tags$div(
       class = "reference-box",
       tags$p("Manual prompt-only mode does not need provider settings.")
@@ -111,33 +102,6 @@ register_ai_server <- function(input, output, session) {
       )
     } else {
       ollama_status(result$message)
-    }
-  })
-
-  observeEvent(input$ai_delete_ollama_model, {
-    model_to_delete <- input$ai_ollama_model %||% ""
-    if (!isTRUE(input$ai_confirm_delete_ollama_model)) {
-      ollama_status("Status: delete_not_confirmed\n\nCheck the confirmation box before deleting a local Ollama model.")
-      return()
-    }
-    result <- ai_ollama_delete_model(model_to_delete, input$ai_ollama_endpoint %||% "")
-    ollama_status(paste(
-      paste("Status:", result$status),
-      "",
-      result$message,
-      sep = "\n"
-    ))
-    if (isTRUE(result$ok)) {
-      refresh <- ai_ollama_model_names(input$ai_ollama_endpoint %||% "")
-      if (isTRUE(refresh$ok)) {
-        ollama_models(refresh$models %||% character(0))
-        updateSelectInput(
-          session,
-          "ai_ollama_model",
-          choices = c("Type model manually" = "", stats::setNames(refresh$models, refresh$models)),
-          selected = ""
-        )
-      }
     }
   })
 
@@ -245,10 +209,6 @@ register_ai_server <- function(input, output, session) {
         result$message,
         sep = "\n"
       ))
-    }
-
-    if (provider == "mock") {
-      return("Status: mock_ready\n\nThe local mock provider is ready and does not use network calls.")
     }
 
     if (provider == "none") {
@@ -399,17 +359,6 @@ register_ai_server <- function(input, output, session) {
       ))
     }
 
-    if (provider == "mock") {
-      return(tags$div(
-        class = "concept-card",
-        tags$ul(
-          tags$li("Mock mode is for testing the app's direct-answer flow."),
-          tags$li("It does not call a real AI model and does not use network access."),
-          tags$li("Use it when checking UI behavior or training someone on the app flow.")
-        )
-      ))
-    }
-
     tags$div(
       class = "concept-card",
       tags$ul(
@@ -433,9 +382,13 @@ register_ai_server <- function(input, output, session) {
     ))
   })
 
-  output$ai_response <- renderText({
+  output$ai_response <- renderUI({
     if (is.null(input$ai_send) || input$ai_send == 0) {
-      return("Choose an AI provider in AI Settings, enter a request, then click Ask AI. Use the local mock provider to test direct-answer flow without sending data anywhere.")
+      return(tags$div(
+        class = "markdown-output",
+        tags$p("Choose an AI provider in AI Settings, enter a request, then click Ask AI."),
+        tags$p("Manual prompt-only mode prepares a prompt without sending data anywhere.")
+      ))
     }
 
     isolate({
@@ -462,11 +415,10 @@ register_ai_server <- function(input, output, session) {
         )
       )
 
-      paste(
-        paste("Status:", result$status),
-        "",
-        result$message,
-        sep = "\n"
+      tags$div(
+        class = "ai-response-wrapper",
+        tags$p(tags$strong("Status: "), result$status),
+        render_markdownish(result$message)
       )
     })
   })
@@ -478,11 +430,10 @@ register_ai_server <- function(input, output, session) {
     local_provider <- provider %in% c("ollama", "codex_cli", "claude_code_cli")
 
     task_tip <- ai_task_tip(task)
+    context_tip <- ai_task_context_prompt(task)
 
     provider_tip <- if (online_provider && !isTRUE(input$ai_allow_external)) {
       "You selected an online provider path, but external-send approval is unchecked. Keep this prompt local until you review sensitive data."
-    } else if (provider == "mock") {
-      "The local mock provider returns a deterministic test response. It is useful for checking app flow but is not a real model answer."
     } else if (provider == "ollama") {
       "Ollama sends prompts to the configured local endpoint only. Make sure Ollama is running and a model name is entered in AI Settings."
     } else if (local_provider) {
@@ -497,6 +448,7 @@ register_ai_server <- function(input, output, session) {
       class = "concept-card",
       tags$ul(
         tags$li(tags$strong("Task tip: "), task_tip),
+        tags$li(tags$strong("Context to include: "), context_tip),
         tags$li(tags$strong("Provider tip: "), provider_tip),
         tags$li(tags$strong("Safety tip: "), "Do not include private data, secrets, API keys, tokens, or full sensitive datasets."),
         tags$li(tags$strong("Verification tip: "), "Ask AI to show assumptions and R code, then verify the result with the calculators or R output.")

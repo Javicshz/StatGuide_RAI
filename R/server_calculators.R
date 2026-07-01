@@ -297,6 +297,25 @@ register_calculator_server <- function(input, output, session) {
 
   build_r_code <- function() {
     fn <- input$fn
+    alt_arg <- function(alternative) {
+      if (identical(alternative, "two.sided")) {
+        '"two.sided"'
+      } else if (identical(alternative, "less")) {
+        '"less"'
+      } else {
+        '"greater"'
+      }
+    }
+    code_num <- function(x, default = "NA") {
+      if (is.null(x) || !nzchar(trimws(as.character(x)))) {
+        return(default)
+      }
+      value <- suppressWarnings(as.numeric(x))
+      if (is.na(value)) {
+        return(default)
+      }
+      format_num_for_code(value)
+    }
     switch(fn,
       feelingLucky = {
         data <- parse_data_numbers(input$lucky_raw_data)
@@ -396,6 +415,344 @@ register_calculator_server <- function(input, output, session) {
         f <- parse_nums(input$frequencies)
         selected <- as.integer(parse_nums(input$selected_positions))
         paste(c(paste0("f <- ", code_vector(f)), paste0("selected <- ", code_vector(selected)), "sum(f[selected]) / sum(f) * 100"), collapse = "\n")
+      },
+      percentToCount = {
+        paste0("total <- ", input$total, "\npercent <- ", input$percent, "\ntotal * percent / 100")
+      },
+      graphRatio = {
+        paste0("larger_value <- ", input$numerator_value, "\ncomparison_value <- ", input$denominator_value, "\nlarger_value / comparison_value")
+      },
+      modeClass = {
+        x <- parse_data_numbers(input$data)
+        paste(c(
+          paste0("x <- ", code_vector(x)),
+          "tab <- table(x)",
+          "modes <- as.numeric(names(tab)[tab == max(tab)])",
+          "modes"
+        ), collapse = "\n")
+      },
+      fiveNumberSummary = {
+        x <- parse_data_numbers(input$data)
+        paste(c(
+          paste0("x <- ", code_vector(x)),
+          "summary(x)",
+          "fivenum(x)",
+          "boxplot.stats(x)$out"
+        ), collapse = "\n")
+      },
+      groupedStats = {
+        midpoints <- parse_data_numbers(input$midpoints)
+        frequencies <- parse_data_numbers(input$frequencies)
+        paste(c(
+          paste0("midpoint <- ", code_vector(midpoints)),
+          paste0("frequency <- ", code_vector(frequencies)),
+          "n <- sum(frequency)",
+          "grouped_mean <- sum(midpoint * frequency) / n",
+          "grouped_variance <- sum(frequency * (midpoint - grouped_mean)^2) / (n - 1)",
+          "grouped_sd <- sqrt(grouped_variance)"
+        ), collapse = "\n")
+      },
+      trimmedMean = {
+        x <- parse_data_numbers(input$data)
+        trim <- input$trim_percent / 100
+        paste(c(
+          paste0("x <- ", code_vector(x)),
+          paste0("mean(x, trim = ", format_num_for_code(trim), ")")
+        ), collapse = "\n")
+      },
+      weightedAverage = {
+        values <- parse_data_numbers(input$weighted_values)
+        weights <- parse_data_numbers(input$weights)
+        paste(c(
+          paste0("values <- ", code_vector(values)),
+          paste0("weights <- ", code_vector(weights)),
+          "weighted.mean(values, weights)"
+        ), collapse = "\n")
+      },
+      missingFromMean = {
+        known_values <- parse_data_numbers(input$known_values)
+        paste(c(
+          paste0("known <- ", code_vector(known_values)),
+          paste0("total_n <- ", input$total_n),
+          paste0("target_mean <- ", input$target_mean),
+          "missing_value <- target_mean * total_n - sum(known)",
+          "missing_value"
+        ), collapse = "\n")
+      },
+      coeffVariation = {
+        paste0("mean_value <- ", input$mean_val, "\nsd_value <- ", input$sd_val, "\nsd_value / mean_value * 100")
+      },
+      corrReg = {
+        x <- parse_data_numbers(input$x)
+        y <- parse_data_numbers(input$y)
+        paste(c(
+          paste0("x <- ", code_vector(x)),
+          paste0("y <- ", code_vector(y)),
+          "cor(x, y)",
+          "fit <- lm(y ~ x)",
+          "summary(fit)"
+        ), collapse = "\n")
+      },
+      predictY = {
+        x <- parse_data_numbers(input$x)
+        y <- parse_data_numbers(input$y)
+        paste(c(
+          paste0("x <- ", code_vector(x)),
+          paste0("y <- ", code_vector(y)),
+          "fit <- lm(y ~ x)",
+          paste0("predict(fit, newdata = data.frame(x = ", input$new_x, "))")
+        ), collapse = "\n")
+      },
+      simpleProb = {
+        paste0("favorable <- ", input$favorable, "\ntotal <- ", input$total, "\nfavorable / total")
+      },
+      diceSum = {
+        paste(c(
+          "sums <- outer(1:6, 1:6, `+`)",
+          paste0("target <- ", input$dice_value),
+          switch(input$dice_type,
+            equal = "mean(sums == target)",
+            less = "mean(sums < target)",
+            less_equal = "mean(sums <= target)",
+            greater = "mean(sums > target)",
+            greater_equal = "mean(sums >= target)"
+          )
+        ), collapse = "\n")
+      },
+      complementProb = {
+        paste0("p_event <- ", input$prob_event, "\n1 - p_event")
+      },
+      additionRule = {
+        paste0(
+          "a_count <- ", input$a_count,
+          "\nb_count <- ", input$b_count,
+          "\noverlap_count <- ", input$overlap_count,
+          "\ntotal_count <- ", input$total_count,
+          "\n(a_count + b_count - overlap_count) / total_count"
+        )
+      },
+      conditionalProb = {
+        paste0("joint_count <- ", input$joint_count, "\ngiven_count <- ", input$given_count, "\njoint_count / given_count")
+      },
+      sequenceProbability = {
+        favorable <- parse_data_numbers(input$seq_favorable)
+        totals <- parse_data_numbers(input$seq_total)
+        paste(c(
+          paste0("favorable <- ", code_vector(favorable)),
+          paste0("total <- ", code_vector(totals)),
+          "prod(favorable / total)"
+        ), collapse = "\n")
+      },
+      independentProbability = {
+        probs <- parse_data_numbers(input$event_probs)
+        paste(c(paste0("probabilities <- ", code_vector(probs)), "prod(probabilities)"), collapse = "\n")
+      },
+      factorialArrangements = {
+        if (input$factorial_mode == "combination") {
+          paste0("n <- ", input$factorial_n, "\nr <- ", input$factorial_r, "\nchoose(n, r)")
+        } else {
+          parts <- parse_data_numbers(input$factorial_parts)
+          paste(c(
+            paste0("n <- ", input$factorial_n),
+            paste0("parts <- ", code_vector(parts)),
+            "factorial(n) / prod(factorial(parts))"
+          ), collapse = "\n")
+        }
+      },
+      bayesProbability = {
+        prior <- parse_data_numbers(input$bayes_priors)
+        likelihood <- parse_data_numbers(input$bayes_event_probs)
+        paste(c(
+          paste0("prior <- ", code_vector(prior)),
+          paste0("likelihood <- ", code_vector(likelihood)),
+          paste0("target <- ", input$bayes_target),
+          "weights <- prior * likelihood",
+          "weights[target] / sum(weights)"
+        ), collapse = "\n")
+      },
+      discreteDist = {
+        x <- parse_data_numbers(input$x)
+        prob <- parse_data_numbers(input$prob)
+        paste(c(
+          paste0("x <- ", code_vector(x)),
+          paste0("prob <- ", code_vector(prob)),
+          "sum(prob)",
+          "mu <- sum(x * prob)",
+          "sd <- sqrt(sum((x - mu)^2 * prob))"
+        ), collapse = "\n")
+      },
+      probFromDist = {
+        x <- parse_data_numbers(input$x)
+        prob <- parse_data_numbers(input$prob)
+        line <- switch(input$type,
+          equal = "sum(prob[x == value])",
+          less = "sum(prob[x < value])",
+          less_equal = "sum(prob[x <= value])",
+          greater = "sum(prob[x > value])",
+          greater_equal = "sum(prob[x >= value])",
+          between = "sum(prob[x >= value & x <= upper_value])"
+        )
+        paste(c(
+          paste0("x <- ", code_vector(x)),
+          paste0("prob <- ", code_vector(prob)),
+          paste0("value <- ", input$value),
+          paste0("upper_value <- ", input$upper_value),
+          line
+        ), collapse = "\n")
+      },
+      expectedMonetaryValue = {
+        outcomes <- parse_data_numbers(input$emv_outcomes)
+        prob <- parse_data_numbers(input$emv_prob)
+        paste(c(
+          paste0("outcome <- ", code_vector(outcomes)),
+          paste0("prob <- ", code_vector(prob)),
+          "sum(outcome * prob)"
+        ), collapse = "\n")
+      },
+      discreteUniform = {
+        paste(c(
+          paste0("values <- ", input$min_value, ":", input$max_value),
+          "prob_each <- 1 / length(values)",
+          "mean(values)",
+          "sd(values)"
+        ), collapse = "\n")
+      },
+      binomialDistribution = {
+        line <- switch(input$type,
+          equal = "dbinom(value, n, p)",
+          less = "pbinom(value - 1, n, p)",
+          less_equal = "pbinom(value, n, p)",
+          greater = "1 - pbinom(value, n, p)",
+          greater_equal = "1 - pbinom(value - 1, n, p)",
+          between = "pbinom(upper_value, n, p) - pbinom(value - 1, n, p)"
+        )
+        paste(c(
+          paste0("n <- ", input$n),
+          paste0("p <- ", input$p),
+          paste0("value <- ", input$value),
+          paste0("upper_value <- ", input$upper_value),
+          line
+        ), collapse = "\n")
+      },
+      poissonDistribution = {
+        line <- switch(input$type,
+          equal = "dpois(value, lambda)",
+          less = "ppois(value - 1, lambda)",
+          less_equal = "ppois(value, lambda)",
+          greater = "1 - ppois(value, lambda)",
+          greater_equal = "1 - ppois(value - 1, lambda)",
+          between = "ppois(upper_value, lambda) - ppois(value - 1, lambda)"
+        )
+        paste(c(
+          paste0("rate <- ", input$rate),
+          paste0("periods <- ", input$periods),
+          "lambda <- rate * periods",
+          paste0("value <- ", input$value),
+          paste0("upper_value <- ", input$upper_value),
+          line
+        ), collapse = "\n")
+      },
+      hypergeometricDistribution = {
+        failures <- input$total_items - input$success_items
+        line <- switch(input$type,
+          expected = "draws * success_items / total_items",
+          equal = "dhyper(value, success_items, failure_items, draws)",
+          less = "phyper(value - 1, success_items, failure_items, draws)",
+          less_equal = "phyper(value, success_items, failure_items, draws)",
+          greater = "1 - phyper(value, success_items, failure_items, draws)",
+          greater_equal = "1 - phyper(value - 1, success_items, failure_items, draws)",
+          between = "phyper(upper_value, success_items, failure_items, draws) - phyper(value - 1, success_items, failure_items, draws)"
+        )
+        paste(c(
+          paste0("total_items <- ", input$total_items),
+          paste0("success_items <- ", input$success_items),
+          paste0("failure_items <- ", failures),
+          paste0("draws <- ", input$sample_size),
+          paste0("value <- ", input$value),
+          paste0("upper_value <- ", input$upper_value),
+          line
+        ), collapse = "\n")
+      },
+      uniformDist = {
+        paste0("a <- ", input$a, "\nb <- ", input$b, "\nlower <- ", code_num(input$lower, "a"), "\nupper <- ", code_num(input$upper, "b"), "\n(upper - lower) / (b - a)")
+      },
+      zScoreCalc = {
+        paste0("x <- ", input$x_value, "\nmu <- ", input$mean_val, "\nsigma <- ", input$sd_val, "\n(x - mu) / sigma")
+      },
+      normalProb = {
+        paste0("mu <- ", input$mean_val, "\nsigma <- ", input$sd_val, "\nlower <- ", code_num(input$lower, "-Inf"), "\nupper <- ", code_num(input$upper, "Inf"), "\npnorm(upper, mu, sigma) - pnorm(lower, mu, sigma)")
+      },
+      invNormal = {
+        paste0("area_left <- ", input$prob_left, "\nmu <- ", input$mean_val, "\nsigma <- ", input$sd_val, "\nqnorm(area_left, mu, sigma)")
+      },
+      normalApproxBinomial = {
+        bounds <- switch(input$type,
+          equal = c(input$value - 0.5, input$value + 0.5),
+          less = c(-Inf, input$value - 0.5),
+          less_equal = c(-Inf, input$value + 0.5),
+          greater = c(input$value + 0.5, Inf),
+          greater_equal = c(input$value - 0.5, Inf),
+          between = c(input$value - 0.5, input$upper_value + 0.5)
+        )
+        paste0("n <- ", input$n, "\np <- ", input$p, "\nmu <- n * p\nsigma <- sqrt(n * p * (1 - p))\nlower <- ", format_num_for_code(bounds[1]), "\nupper <- ", format_num_for_code(bounds[2]), "\npnorm(upper, mu, sigma) - pnorm(lower, mu, sigma)")
+      },
+      sampleMeanProb = {
+        paste0("mu <- ", input$mu, "\nsigma <- ", input$sigma, "\nn <- ", input$n, "\nlower <- ", code_num(input$lower, "-Inf"), "\nupper <- ", code_num(input$upper, "Inf"), "\nse <- sigma / sqrt(n)\npnorm(upper, mu, se) - pnorm(lower, mu, se)")
+      },
+      samplePropProb = {
+        paste0("p <- ", input$p, "\nn <- ", input$n, "\nlower <- ", code_num(input$lower, "-Inf"), "\nupper <- ", code_num(input$upper, "Inf"), "\nse <- sqrt(p * (1 - p) / n)\npnorm(upper, p, se) - pnorm(lower, p, se)")
+      },
+      varianceCI = {
+        alpha <- 1 - input$conf_level
+        paste0("n <- ", input$n, "\ns <- ", input$s, "\nalpha <- ", format_num_for_code(alpha), "\nvariance_ci <- (n - 1) * s^2 / qchisq(c(1 - alpha/2, alpha/2), df = n - 1)\nsqrt(variance_ci)")
+      },
+      meanKnownSigmaTest = {
+        paste0("n <- ", input$n, "\nxbar <- ", input$xbar, "\nmu0 <- ", input$mu0, "\nsigma <- ", input$sigma, "\nz <- (xbar - mu0) / (sigma / sqrt(n))\np_value <- ", if (input$alternative == "two.sided") "2 * pnorm(-abs(z))" else if (input$alternative == "less") "pnorm(z)" else "1 - pnorm(z)", "\np_value")
+      },
+      meanTTest = {
+        paste0("n <- ", input$n, "\nxbar <- ", input$xbar, "\nmu0 <- ", input$mu0, "\ns <- ", input$s, "\nt <- (xbar - mu0) / (s / sqrt(n))\np_value <- ", if (input$alternative == "two.sided") "2 * pt(-abs(t), df = n - 1)" else if (input$alternative == "less") "pt(t, df = n - 1)" else "1 - pt(t, df = n - 1)", "\np_value")
+      },
+      onePropTest = {
+        paste0("x <- ", input$x_success, "\nn <- ", input$n, "\np0 <- ", input$p0, "\nphat <- x / n\nz <- (phat - p0) / sqrt(p0 * (1 - p0) / n)\np_value <- ", if (input$alternative == "two.sided") "2 * pnorm(-abs(z))" else if (input$alternative == "less") "pnorm(z)" else "1 - pnorm(z)", "\np_value")
+      },
+      twoIndSampleProp = {
+        paste0("x <- c(", input$x1, ", ", input$x2, ")\nn <- c(", input$n1, ", ", input$n2, ")\nprop.test(x, n, alternative = ", alt_arg(input$alternative), ", correct = FALSE)")
+      },
+      twoIndMeanUneqVar = {
+        paste0("# With summary stats, compute Welch's t test manually.\nn1 <- ", input$n1, "\nxbar1 <- ", input$x1, "\ns1 <- ", input$s1, "\nn2 <- ", input$n2, "\nxbar2 <- ", input$x2, "\ns2 <- ", input$s2, "\nse <- sqrt(s1^2/n1 + s2^2/n2)\nt <- (xbar1 - xbar2) / se")
+      },
+      twoIndMeansEqVar = {
+        paste0("n1 <- ", input$n1, "\nxbar1 <- ", input$x1, "\ns1 <- ", input$s1, "\nn2 <- ", input$n2, "\nxbar2 <- ", input$x2, "\ns2 <- ", input$s2, "\nsp2 <- ((n1 - 1)*s1^2 + (n2 - 1)*s2^2) / (n1 + n2 - 2)\nse <- sqrt(sp2 * (1/n1 + 1/n2))\nt <- (xbar1 - xbar2) / se")
+      },
+      pairedDiffCI = {
+        before <- parse_data_numbers(input$before_values)
+        after <- parse_data_numbers(input$after_values)
+        alpha <- 1 - input$conf_level
+        paste(c(
+          paste0("before <- ", code_vector(before)),
+          paste0("after <- ", code_vector(after)),
+          "d <- before - after",
+          paste0("alpha <- ", format_num_for_code(alpha)),
+          "mean(d) + c(-1, 1) * qt(1 - alpha/2, length(d) - 1) * sd(d) / sqrt(length(d))"
+        ), collapse = "\n")
+      },
+      twoVarianceRatio = {
+        paste0("n1 <- ", input$n1, "\nvar1 <- ", input$var1, "\nn2 <- ", input$n2, "\nvar2 <- ", input$var2, "\nf_stat <- var1 / var2\nf_stat")
+      },
+      chiSqGoodnessFit = {
+        observed <- parse_data_numbers(input$observed)
+        paste(c(
+          paste0("observed <- ", code_vector(observed)),
+          "# Leave p blank for equal probabilities, or set p <- c(...).",
+          "chisq.test(observed)"
+        ), collapse = "\n")
+      },
+      chiSqIndependence = {
+        observed <- parse_data_numbers(input$matrix_vals)
+        paste(c(
+          paste0("observed <- matrix(", code_vector(observed), ", nrow = ", input$nrow, ", byrow = TRUE)"),
+          "chisq.test(observed)"
+        ), collapse = "\n")
       },
       "Press Run to show a simple copyable R calculation for this calculator."
     )

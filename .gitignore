@@ -1,9 +1,13 @@
-.DS_Store
+.Renviron
+.Rprofile
+.env
+.env.*
 .Rhistory
 .RData
 .Ruserdata
-.Renviron
-.Rprofile
+.Rproj.user/
+.DS_Store
+.httr-oauth
 
 # Credentials and local secrets
 *.key
@@ -11,11 +15,8 @@
 *.token
 secrets/
 credentials/
-.env
-.env.*
 
 # R and package build artifacts
-*.Rproj.user/
 packrat/lib*/
 renv/library/
 renv/staging/
@@ -34,10 +35,5 @@ models/
 *.gguf
 *.safetensors
 
-# Local planning, research, and migration artifacts
-ROADMAP.md
-PROGRESS.md
-DECISIONS.md
-PROJECT-INVENTORY.md
-RESEARCH-NOTES.md
-legacy/
+*.tmp
+*.log

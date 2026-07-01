@@ -10,12 +10,6 @@ No setup required.
 
 Use this when you want the app to prepare a structured prompt that you copy into another tool yourself.
 
-## Local Mock Provider
-
-No setup required.
-
-Use this to test the direct-answer flow without sending data anywhere. It returns a deterministic local response and is not a real model.
-
 ## Ollama Local Model
 
 1. Install and start Ollama.
@@ -38,7 +32,7 @@ http://localhost:11434
 8. Choose an installed model from the dropdown.
 9. Go to **Ask AI**, enter a request, and click **Ask AI**.
 
-The app can also delete a selected local Ollama model after you check the confirmation box. Test deletion only with a model you are comfortable removing.
+Model management should be done directly in Ollama. This app lists and uses installed models, but it does not provide destructive model-delete controls.
 
 ## Codex CLI (Local)
 
@@ -86,13 +80,7 @@ If the app reports `cli_not_found`, install Claude Code or enter the full path t
 
 ## OpenAI-Compatible API
 
-Set an environment variable outside the app:
-
-```r
-Sys.setenv(OPENAI_API_KEY = "your-key-here")
-```
-
-For persistent local setup, use your user `.Renviron`:
+Set an environment variable outside the app. For persistent local setup, use your user `.Renviron`:
 
 ```r
 usethis::edit_r_environ()
@@ -128,13 +116,7 @@ OPENAI_API_KEY
 
 ## Anthropic / Claude API
 
-Set an environment variable outside the app:
-
-```r
-Sys.setenv(ANTHROPIC_API_KEY = "your-key-here")
-```
-
-For persistent local setup, use your user `.Renviron`:
+Set an environment variable outside the app. For persistent local setup, use your user `.Renviron`:
 
 ```text
 ANTHROPIC_API_KEY=your-key-here
