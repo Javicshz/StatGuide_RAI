@@ -1237,19 +1237,22 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2, conf_level = N
   if (!is.null(conf_level) && is.null(alpha)) {
     alpha <- 1 - conf_level
   }
+  if (is.null(alpha)) {
+    alpha <- 0.05
+    conf_level <- 0.95
+  }
   diff_mean <- x1 - x2
   stnd_err <- sqrt((sigma1^2 / n1) + (sigma2^2 / n2))
   z_stat <- diff_mean / stnd_err
-  z_for_p <- round(z_stat, 2)
   if (alternative == "two.sided") {
     z_critical <- qnorm(1 - alpha / 2)
-    p_value <- 2 * pnorm(-abs(z_for_p))
+    p_value <- 2 * pnorm(-abs(z_stat))
   } else if (alternative == "less") {
-    z_critical <- qnorm(1 - alpha)
-    p_value <- pnorm(z_for_p)
+    z_critical <- qnorm(alpha)
+    p_value <- pnorm(z_stat)
   } else if (alternative == "greater") {
     z_critical <- qnorm(1 - alpha)
-    p_value <- 1 - pnorm(z_for_p)
+    p_value <- 1 - pnorm(z_stat)
   }
   marg_err <- qnorm(1 - alpha / 2) * stnd_err
   lower <- diff_mean - marg_err
@@ -1305,124 +1308,6 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2, conf_level = N
 }
 
 ###############################################################################
-# Two Independent Sample Proportions
-###############################################################################
-
-twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
-                             data1 = NULL, data2 = NULL,
-                             conf_level = NULL, alpha = NULL,
-                             alternative = "two.sided") {
-  # x1 = number of successes in population 1
-  # n1 = sample size for population 1
-  # x2 = number of successes in population 2
-  # n2 = sample size for population 2
-  # data1 = raw 0/1 data for sample 1, where 1 = success and 0 = failure
-  # data2 = raw 0/1 data for sample 2, where 1 = success and 0 = failure
-  # conf_level = confidence level
-  # alpha = significance level
-  # alternative = "two.sided", "less", or "greater"
-  
-  if (!is.null(data1)) {
-    x1 <- sum(data1)
-    n1 <- length(data1)
-  }
-  if (!is.null(data2)) {
-    x2 <- sum(data2)
-    n2 <- length(data2)
-  }
-  if (is.null(conf_level) && !is.null(alpha)) {
-    conf_level <- 1 - alpha
-  }
-  if (!is.null(conf_level) && is.null(alpha)) {
-    alpha <- 1 - conf_level
-  }
-  phat_1 <- x1 / n1
-  phat_2 <- x2 / n2
-  diff_phat <- phat_1 - phat_2
-  stnd_err <- sqrt((phat_1 * (1 - phat_1) / n1) + (phat_2 * (1 - phat_2) / n2))
-  pooled_phat <- (x1 + x2) / (n1 + n2)
-  test_stnd_err <- sqrt(pooled_phat * (1 - pooled_phat) * (1 / n1 + 1 / n2))
-  z_stat <- diff_phat / test_stnd_err
-  if (alternative == "two.sided") {
-    z_critical <- qnorm(1 - alpha / 2)
-    p_value <- 2 * pnorm(-abs(z_stat))
-  } else if (alternative == "less") {
-    z_critical <- qnorm(1 - alpha)
-    p_value <- pnorm(z_stat)
-  } else if (alternative == "greater") {
-    z_critical <- qnorm(1 - alpha)
-    p_value <- 1 - pnorm(z_stat)
-  }
-  marg_err <- qnorm(1 - alpha / 2) * stnd_err
-  lower <- diff_phat - marg_err
-  upper <- diff_phat + marg_err
-  if (p_value < alpha) {
-    decision <- "Reject"
-    evidence <- "sufficient evidence"
-  } else {
-    decision <- "Fail to Reject"
-    evidence <- "insufficient evidence"
-  }
-  cat("--------------------------------------------------\n")
-  cat("Two Independent Sample Proportions\n")
-  cat("--------------------------------------------------\n")
-  cat("H0: p1 - p2 = 0\n")
-  if (alternative == "two.sided") {
-    cat("Ha: p1 - p2 != 0\n")
-  } else if (alternative == "less") {
-    cat("Ha: p1 - p2 < 0\n")
-  } else {
-    cat("Ha: p1 - p2 > 0\n")
-  }
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-28s: %10.6f\n", "Successes Sample 1", x1))
-  cat(sprintf("%-28s: %10.6f\n", "Sample Size 1", n1))
-  cat(sprintf("%-28s: %10.6f\n", "p1_hat", phat_1))
-  cat(sprintf("%-28s: %9.6f%%\n", "p1_hat (%)", phat_1 * 100))
-  cat(sprintf("%-28s: %10.6f\n", "Successes Sample 2", x2))
-  cat(sprintf("%-28s: %10.6f\n", "Sample Size 2", n2))
-  cat(sprintf("%-28s: %10.6f\n", "p2_hat", phat_2))
-  cat(sprintf("%-28s: %9.6f%%\n", "p2_hat (%)", phat_2 * 100))
-  cat(sprintf("%-28s: %10.6f\n", "Difference p1_hat - p2_hat", diff_phat))
-  cat(sprintf("%-28s: %9.6f%%\n", "Difference (%)", diff_phat * 100))
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-28s: %10.6f\n", "Standard Error for CI", stnd_err))
-  cat(sprintf("%-28s: %10.6f\n", "z Critical", z_critical))
-  cat(sprintf("%-28s: %10.6f\n", "Margin of Error", marg_err))
-  cat(sprintf("%-28s: %10.6f\n", "Lower Endpoint", lower))
-  cat(sprintf("%-28s: %10.6f\n", "Upper Endpoint", upper))
-  cat(sprintf("%-28s: %9.6f%%\n", "Lower Endpoint (%)", lower * 100))
-  cat(sprintf("%-28s: %9.6f%%\n", "Upper Endpoint (%)", upper * 100))
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-28s: %10.6f\n", "Pooled Proportion", pooled_phat))
-  cat(sprintf("%-28s: %9.6f%%\n", "Pooled Proportion (%)", pooled_phat * 100))
-  cat(sprintf("%-28s: %10.6f\n", "Standard Error for Test", test_stnd_err))
-  cat(sprintf("%-28s: %10.6f\n", "Test Statistic", z_stat))
-  cat(sprintf("%-28s: %10.6f\n", "P-value", p_value))
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-28s: %s (%s)\n", "Decision", decision, evidence))
-  cat("--------------------------------------------------\n")
-  if (!is.null(conf_level)) {
-    if (lower > 0 && upper > 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          round(lower, 4), "and", round(upper, 4),
-          "larger than Population 2.\n")
-    } else if (lower < 0 && upper < 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          abs(round(upper, 4)), "and", abs(round(lower, 4)),
-          "smaller than Population 2.\n")
-    } else {
-      cat("CI Interpretation:\n")
-      cat("Since the interval contains 0, there is not sufficient evidence of a difference.\n")
-    }
-    
-    cat("--------------------------------------------------\n")
-  }
-}
-
-###############################################################################
 # Two Independent Means Unequal Variances
 ###############################################################################
 
@@ -1444,6 +1329,10 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
   if (!is.null(conf_level) && is.null(alpha)) {
     alpha <- 1 - conf_level
   }
+  if (is.null(alpha)) {
+    alpha <- 0.05
+    conf_level <- 0.95
+  }
   
   diff_mean <- x1 - x2
   stnd_err <- sqrt((s1^2 / n1) + (s2^2 / n2))
@@ -1457,7 +1346,7 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
     t_critical <- qt(1 - alpha / 2, df)
     p_value <- 2 * pt(-abs(t_stat), df)
   } else if (alternative == "less") {
-    t_critical <- qt(1 - alpha, df)
+    t_critical <- qt(alpha, df)
     p_value <- pt(t_stat, df)
   } else if (alternative == "greater") {
     t_critical <- qt(1 - alpha, df)
@@ -1549,6 +1438,10 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
   if (!is.null(conf_level) && is.null(alpha)) {
     alpha <- 1 - conf_level
   }
+  if (is.null(alpha)) {
+    alpha <- 0.05
+    conf_level <- 0.95
+  }
   
   diff_mean <- x1 - x2
   
@@ -1561,7 +1454,7 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
     t_critical <- qt(1 - alpha / 2, df)
     p_value <- 2 * pt(-abs(t_stat), df)
   } else if (alternative == "less") {
-    t_critical <- qt(1 - alpha, df)
+    t_critical <- qt(alpha, df)
     p_value <- pt(t_stat, df)
   } else if (alternative == "greater") {
     t_critical <- qt(1 - alpha, df)
@@ -1804,6 +1697,10 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
   if (!is.null(conf_level) && is.null(alpha)) {
     alpha <- 1 - conf_level
   }
+  if (is.null(alpha)) {
+    alpha <- 0.05
+    conf_level <- 0.95
+  }
   
   phat_1 <- x1 / n1
   phat_2 <- x2 / n2
@@ -1817,7 +1714,7 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
     z_critical <- qnorm(1 - alpha / 2)
     p_value <- 2 * pnorm(-abs(z_stat))
   } else if (alternative == "less") {
-    z_critical <- qnorm(1 - alpha)
+    z_critical <- qnorm(alpha)
     p_value <- pnorm(z_stat)
   } else if (alternative == "greater") {
     z_critical <- qnorm(1 - alpha)

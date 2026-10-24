@@ -221,7 +221,7 @@ two_mean_known_result <- env$capture_calculator_result(
 two_mean_diff <- 52 - 48
 two_mean_se <- sqrt(8^2 / 40 + 7^2 / 35)
 two_mean_stat <- two_mean_diff / two_mean_se
-two_mean_p <- 1 - pnorm(round(two_mean_stat, 2))
+two_mean_p <- 1 - pnorm(two_mean_stat)
 check("two mean known sigma structured difference", identical(two_mean_known_result$values$difference, two_mean_diff))
 check("two mean known sigma structured statistic", isTRUE(all.equal(two_mean_known_result$values$statistic, two_mean_stat)))
 check("two mean known sigma structured p value", isTRUE(all.equal(two_mean_known_result$values$p_value, two_mean_p)))
@@ -351,5 +351,12 @@ check("examples tab hidden from main navigation", !grepl(">Examples<", ui_text, 
 check("concept bold term class removed", !grepl("concept-term", ui_text, fixed = TRUE))
 server_reference_text <- paste(readLines("R/server_reference.R", warn = FALSE), collapse = "\n")
 check("formula to concept link exists", grepl("Read related concept", server_reference_text, fixed = TRUE))
+
+two_z <- env$capture_calculator_result(env$twoIndMeansKnownSigma(50, 10.3911, 1, 50, 10, 1, alpha = 0.05))
+check("two-mean z test uses unrounded z for p-value", abs(two_z$values$p_value - 2 * pnorm(-1.9555)) < 1e-9)
+check("two-mean z test decision follows exact p-value", identical(two_z$values$decision, "Fail to Reject"))
+left_t <- env$capture_calculator_result(env$twoIndMeansEqVar(10, 4, 1, 10, 5, 1, alpha = 0.05, alternative = "less"))
+check("left-tailed two-sample critical value is negative", left_t$values$critical_value < 0)
+check("legacy two-sample test defaults alpha", !inherits(try(capture.output(twoIndMeanUneqVar(10, 5, 1, 10, 4, 1)), silent = TRUE), "try-error"))
 
 cat("Calculator reliability checks passed\n")

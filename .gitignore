@@ -1,4 +1,6 @@
 .Renviron
+.Renviron.*
+.Rapp.history
 .Rprofile
 .env
 .env.*
@@ -12,9 +14,20 @@
 # Credentials and local secrets
 *.key
 *.pem
+*.p12
+*.pfx
 *.token
+id_rsa*
+id_ed25519*
+.netrc
 secrets/
 credentials/
+*credentials*.json
+*service-account*.json
+
+# Local AI tool settings (may hold tokens or machine paths)
+.claude/settings.local.json
+.codex/
 
 # R and package build artifacts
 packrat/lib*/

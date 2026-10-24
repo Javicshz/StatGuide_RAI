@@ -1173,16 +1173,15 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2,
   diff_mean <- x1 - x2
   standard_error <- sqrt((sigma1^2 / n1) + (sigma2^2 / n2))
   statistic <- diff_mean / standard_error
-  z_for_p <- round(statistic, 2)
   if (alternative == "two.sided") {
     critical <- qnorm(1 - alpha / 2)
-    p_value <- 2 * pnorm(-abs(z_for_p))
+    p_value <- 2 * pnorm(-abs(statistic))
   } else if (alternative == "less") {
-    critical <- qnorm(1 - alpha)
-    p_value <- pnorm(z_for_p)
+    critical <- qnorm(alpha)
+    p_value <- pnorm(statistic)
   } else if (alternative == "greater") {
     critical <- qnorm(1 - alpha)
-    p_value <- 1 - pnorm(z_for_p)
+    p_value <- 1 - pnorm(statistic)
   } else {
     stop("Unknown alternative.")
   }
@@ -1209,7 +1208,6 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2,
       standard_error = standard_error,
       critical_value = critical,
       statistic = statistic,
-      statistic_for_p_value = z_for_p,
       p_value = p_value,
       margin_error = margin_error,
       lower_endpoint = lower,
@@ -1263,7 +1261,7 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
     critical <- qnorm(1 - alpha / 2)
     p_value <- 2 * pnorm(-abs(statistic))
   } else if (alternative == "less") {
-    critical <- qnorm(1 - alpha)
+    critical <- qnorm(alpha)
     p_value <- pnorm(statistic)
   } else if (alternative == "greater") {
     critical <- qnorm(1 - alpha)
@@ -1330,7 +1328,7 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
     critical <- qt(1 - alpha / 2, df)
     p_value <- 2 * pt(-abs(statistic), df)
   } else if (alternative == "less") {
-    critical <- qt(1 - alpha, df)
+    critical <- qt(alpha, df)
     p_value <- pt(statistic, df)
   } else if (alternative == "greater") {
     critical <- qt(1 - alpha, df)
@@ -1395,7 +1393,7 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
     critical <- qt(1 - alpha / 2, df)
     p_value <- 2 * pt(-abs(statistic), df)
   } else if (alternative == "less") {
-    critical <- qt(1 - alpha, df)
+    critical <- qt(alpha, df)
     p_value <- pt(statistic, df)
   } else if (alternative == "greater") {
     critical <- qt(1 - alpha, df)

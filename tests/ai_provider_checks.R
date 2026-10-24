@@ -181,4 +181,22 @@ missing_input <- send_ai_request(
 )
 check("missing input is rejected", identical(missing_input$status, "missing_input"))
 
+check("localhost endpoint is local", ai_is_local_endpoint("http://localhost:1234/v1"))
+check("127.0.0.1 endpoint is local", ai_is_local_endpoint("http://127.0.0.1:8080/v1"))
+check("remote endpoint is not local", !ai_is_local_endpoint("https://localhost.example.com/v1"))
+local_openai <- send_ai_request("p", "debug_r", "q", "", ai_provider_settings("generic_openai", "m", "http://127.0.0.1:9/v1", "STATGUIDE_TEST_NO_KEY", "", FALSE))
+check("local OpenAI-compatible server skips send approval and API key", identical(local_openai$status, "online_provider_unreachable"))
+
+if (.Platform$OS.type == "unix") {
+  fake_cli <- tempfile("fake-cli-")
+  writeLines(c("#!/bin/sh", "for a in \"$@\"; do echo \"ARG[$a]\"; done", "cat"), fake_cli)
+  Sys.chmod(fake_cli, "755")
+  marker <- tempfile("injected-")
+  cli <- ai_claude_code_generate(paste0("hi; touch ", marker, " \"q\" $HOME"), list(local_app = fake_cli, model = "x y"))
+  check("CLI run succeeds with shell metacharacters", isTRUE(cli$ok))
+  check("CLI prompt is not executed by the shell", !file.exists(marker))
+  check("CLI prompt arrives on stdin unchanged", grepl(paste0("hi; touch ", marker, " \"q\" $HOME"), cli$message, fixed = TRUE))
+  check("CLI args stay intact", grepl("ARG[x y]", cli$message, fixed = TRUE))
+}
+
 cat("AI provider checks passed\n")

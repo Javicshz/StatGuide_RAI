@@ -1,6 +1,6 @@
 # AI provider planning and request helpers.
-# Online provider calls remain disabled until credential and privacy behavior
-# is implemented. Ollama is supported as a local-only provider.
+# Local providers (Ollama, Codex CLI, Claude Code CLI, localhost OpenAI-compatible
+# servers) run without send approval. Online APIs require explicit approval.
 
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
@@ -248,10 +248,10 @@ ai_provider_summary <- function(provider, model, endpoint, key_env, local_app) {
     paste("Model:", ifelse(nzchar(model), model, "not selected")),
     paste("Endpoint:", ifelse(nzchar(endpoint), endpoint, ai_openai_endpoint(endpoint, provider))),
     paste("API key environment variable:", ifelse(nzchar(key_env), key_env, "not specified")),
-    if (provider %in% c("openai", "generic_openai")) {
-      "Current behavior: OpenAI-compatible chat completion requests are supported after explicit send approval."
+    if (ai_is_local_endpoint(endpoint)) {
+      "Current behavior: local OpenAI-compatible server. No API key or send approval needed."
     } else {
-      "Current behavior: request interface exists, but no Anthropic online API call is made yet."
+      "Current behavior: OpenAI-compatible chat completion requests are supported after explicit send approval."
     }
   )
 }
@@ -467,6 +467,11 @@ ai_openai_endpoint <- function(endpoint, provider = "openai") {
   sub("/+$", "", endpoint)
 }
 
+# LM Studio, llama.cpp, vLLM, and Ollama's /v1 serve OpenAI-style APIs on localhost.
+ai_is_local_endpoint <- function(endpoint) {
+  grepl("^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:|/|$)", trimws(endpoint %||% ""), ignore.case = TRUE)
+}
+
 ai_openai_key_env <- function(key_env, provider = "openai") {
   key_env <- trimws(key_env %||% "")
   if (nzchar(key_env)) {
@@ -497,7 +502,7 @@ ai_openai_request <- function(path, method = "GET", body = NULL, settings, timeo
 
   key_env <- ai_openai_key_env(settings$key_env, settings$provider)
   api_key <- Sys.getenv(key_env, unset = "")
-  if (!nzchar(api_key)) {
+  if (!nzchar(api_key) && !ai_is_local_endpoint(endpoint)) {
     return(list(
       ok = FALSE,
       status = "missing_credentials",
@@ -508,11 +513,11 @@ ai_openai_request <- function(path, method = "GET", body = NULL, settings, timeo
   url <- paste0(endpoint, path)
   handle <- curl::new_handle()
   curl::handle_setopt(handle, timeout = timeout, connecttimeout = 10)
-  curl::handle_setheaders(
-    handle,
-    "Authorization" = paste("Bearer", api_key),
-    "Content-Type" = "application/json"
-  )
+  if (nzchar(api_key)) {
+    curl::handle_setheaders(handle, "Authorization" = paste("Bearer", api_key), "Content-Type" = "application/json")
+  } else {
+    curl::handle_setheaders(handle, "Content-Type" = "application/json")
+  }
 
   if (identical(method, "POST")) {
     curl::handle_setopt(
@@ -872,14 +877,14 @@ ai_cli_run <- function(command, args, input = NULL, label = "CLI", timeout = 120
     ))
   }
 
+  # system2 quotes the command but not args, and runs through the shell.
   output <- tryCatch(
-    system2(resolved, args = args, input = input, stdout = TRUE, stderr = TRUE, timeout = timeout),
-    warning = function(w) w,
+    suppressWarnings(system2(resolved, args = shQuote(args), input = input, stdout = TRUE, stderr = TRUE, timeout = timeout)),
     error = function(e) e
   )
 
   status <- attr(output, "status")
-  if (inherits(output, "warning") || inherits(output, "error") || (!is.null(status) && !identical(status, 0L))) {
+  if (inherits(output, "error") || (!is.null(status) && !identical(status, 0L))) {
     detail <- if (inherits(output, "condition")) conditionMessage(output) else paste(output, collapse = "\n")
     return(list(
       ok = FALSE,
@@ -940,13 +945,13 @@ ai_codex_cli_generate <- function(prompt, settings) {
 
 ai_claude_code_generate <- function(prompt, settings) {
   command <- ai_claude_code_command(settings$local_app)
-  args <- c("-p", prompt, "--output-format", "text")
+  args <- c("-p", "--output-format", "text")
   model <- trimws(settings$model %||% "")
   if (nzchar(model)) {
     args <- c(args, "--model", model)
   }
 
-  result <- ai_cli_run(command, args, label = "Claude Code CLI", timeout = 180)
+  result <- ai_cli_run(command, args, input = prompt, label = "Claude Code CLI", timeout = 180)
   if (!isTRUE(result$ok)) {
     return(result)
   }
@@ -993,7 +998,8 @@ send_ai_request <- function(prompt, task, question, context, settings) {
     return(ai_claude_code_generate(prompt, settings))
   }
 
-  if (provider %in% c("openai", "anthropic", "generic_openai") && !isTRUE(settings$allow_external)) {
+  local_openai <- provider %in% c("openai", "generic_openai") && ai_is_local_endpoint(settings$endpoint)
+  if (provider %in% c("openai", "anthropic", "generic_openai") && !local_openai && !isTRUE(settings$allow_external)) {
     return(list(
       ok = FALSE,
       status = "blocked_external_send",

@@ -39,7 +39,8 @@ register_ai_server <- function(input, output, session) {
     provider <- input$ai_provider %||% "none"
 
     if (provider == "ollama") {
-      models <- ollama_models()
+      # isolate: re-rendering on refresh would reset the endpoint/model boxes.
+      models <- isolate(ollama_models())
       choices <- c("Type model manually" = "", stats::setNames(models, models))
       return(tagList(
         textInput("ai_ollama_endpoint", "Ollama endpoint", "http://localhost:11434"),
@@ -52,7 +53,7 @@ register_ai_server <- function(input, output, session) {
     }
 
     if (provider %in% c("openai", "anthropic", "generic_openai")) {
-      models <- online_models()
+      models <- isolate(online_models())
       choices <- c("Type model manually" = "", stats::setNames(models, models))
       return(tagList(
         textInput("ai_endpoint", "Endpoint URL", "", placeholder = if (provider == "anthropic") "Default: https://api.anthropic.com/v1" else "Default: https://api.openai.com/v1"),
