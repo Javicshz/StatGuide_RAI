@@ -24,15 +24,15 @@ Here are a few screenshots showing what the app currently looks like.
 
 ### Ask AI
 
-The Ask AI tab helps prepare better prompts for statistics, R code, debugging, interpretation, and workflow planning. It can still be used in manual prompt-only mode if no AI provider is connected.
+The Ask AI tab helps prepare better prompts for statistics, R code, debugging, interpretation, and workflow planning. It can still be used in manual prompt-only mode if no AI provider is connected. The **New to AI? Set up a model step by step** button opens a plain-language guide for connecting Ollama, Codex, Claude Code, LM Studio, or an API key.
 
-![Ask AI dark theme example](screenshots/ask-ai-dark.png)
+![Ask AI tab with the step-by-step AI setup button](screenshots/ask-ai-setup-guide-dark.png)
 
 ### Calculator Example
 
-The calculators are meant to help work through common stats problems with inputs, output, quick reference notes, and R code guidance.
+The calculators are meant to help work through common stats problems with inputs, output, quick reference notes, and R code guidance. This example uses the normal approximation to the binomial with a continuity correction.
 
-![Calculator dark theme example](screenshots/calculator-dark.png)
+![Normal approximation to binomial calculator with output and quick reference](screenshots/calculator-normal-approx-dark.png)
 
 ### Concepts And Definitions
 
@@ -42,15 +42,15 @@ The guide sections give quick explanations and reminders for statistics topics, 
 
 ### Formula Reference
 
-The formulas tab keeps important formulas and simple R code templates in one place.
+The formulas tab keeps important formulas and simple R code templates in one place. Formulas are typeset like a textbook (rendered offline with KaTeX) for working problems on paper, with the plain-text version underneath for typing into R.
 
-![Formula reference dark theme example](screenshots/formulas-dark.png)
+![One-proportion z test formula typeset in the Formulas tab](screenshots/formulas-latex-dark.png)
 
 ### Search Helper
 
 The search helper lets you type problem wording and jump toward the calculator or reference topic that is most likely to fit.
 
-![Search helper dark theme example](screenshots/search-helper-dark.png)
+![Search helper suggesting problem types for a probability question](screenshots/search-helper-suggestions-dark.png)
 
 ### Optional AI Helper
 
