@@ -8,6 +8,8 @@ set "RSCRIPT="
 where Rscript >nul 2>nul && set "RSCRIPT=Rscript"
 rem R's installer does not add Rscript to PATH, so look in the default folder.
 if not defined RSCRIPT for /d %%D in ("%ProgramFiles%\R\R-*") do if exist "%%D\bin\Rscript.exe" set "RSCRIPT=%%D\bin\Rscript.exe"
+rem R installed without admin rights goes to the per-user folder.
+if not defined RSCRIPT for /d %%D in ("%LOCALAPPDATA%\Programs\R\R-*") do if exist "%%D\bin\Rscript.exe" set "RSCRIPT=%%D\bin\Rscript.exe"
 
 if not defined RSCRIPT (
   echo R is not installed yet.

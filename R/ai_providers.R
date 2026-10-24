@@ -492,7 +492,13 @@ ai_openai_endpoint <- function(endpoint, provider = "openai") {
 
 # LM Studio, llama.cpp, vLLM, and Ollama's /v1 serve OpenAI-style APIs on localhost.
 ai_is_local_endpoint <- function(endpoint) {
-  grepl("^https?://(localhost|127\\.0\\.0\\.1|\\[::1\\])(:|/|$)", trimws(endpoint %||% ""), ignore.case = TRUE)
+  endpoint <- trimws(endpoint %||% "")
+  authority <- sub("^https?://([^/?#]*).*$", "\\1", endpoint, ignore.case = TRUE)
+  # Not a URL, or user info such as "localhost:1@other.host" that points elsewhere.
+  if (identical(authority, endpoint) || grepl("@", authority, fixed = TRUE)) {
+    return(FALSE)
+  }
+  tolower(sub(":[0-9]*$", "", authority)) %in% c("localhost", "127.0.0.1", "[::1]")
 }
 
 ai_openai_key_env <- function(key_env, provider = "openai") {
@@ -737,7 +743,7 @@ ai_command_path <- function(command) {
     return("")
   }
   if (file.exists(command)) {
-    return(command)
+    return(normalizePath(path.expand(command)))
   }
   found <- Sys.which(command)
   if (nzchar(found)) {
@@ -780,6 +786,16 @@ ai_claude_code_command <- function(command) {
   "claude"
 }
 
+# Windows cannot start npm's .cmd shims directly, so run them through cmd.exe.
+# ponytail: untested on Windows; /s /c with outer quotes is cmd's documented quoting form.
+ai_cli_invocation <- function(resolved, args = character(0)) {
+  if (.Platform$OS.type == "windows" && grepl("\\.(cmd|bat)$", resolved, ignore.case = TRUE)) {
+    inner <- paste(c(shQuote(resolved), args), collapse = " ")
+    return(list(command = Sys.getenv("COMSPEC", "cmd.exe"), args = c("/s", "/c", paste0('"', inner, '"'))))
+  }
+  list(command = resolved, args = args)
+}
+
 ai_cli_check <- function(command, label) {
   resolved <- ai_command_path(command)
   if (!nzchar(resolved)) {
@@ -790,10 +806,15 @@ ai_cli_check <- function(command, label) {
     ))
   }
 
+  call <- ai_cli_invocation(resolved, "--version")
   version <- tryCatch(
-    system2(resolved, "--version", stdout = TRUE, stderr = TRUE, timeout = 15),
+    suppressWarnings(system2(call$command, call$args, stdout = TRUE, stderr = TRUE, timeout = 15)),
     error = function(e) e
   )
+  status <- attr(version, "status")
+  if (!inherits(version, "error") && !is.null(status) && !identical(status, 0L)) {
+    version <- simpleError(paste0("exit status ", status, ": ", paste(version, collapse = "\n")))
+  }
 
   if (inherits(version, "error")) {
     return(list(
@@ -824,8 +845,9 @@ ai_cli_run <- function(command, args, input = NULL, label = "CLI", timeout = 120
   }
 
   # system2 quotes the command but not args, and runs through the shell.
+  call <- ai_cli_invocation(resolved, shQuote(args))
   output <- tryCatch(
-    suppressWarnings(system2(resolved, args = shQuote(args), input = input, stdout = TRUE, stderr = TRUE, timeout = timeout)),
+    suppressWarnings(system2(call$command, args = call$args, input = input, stdout = TRUE, stderr = TRUE, timeout = timeout)),
     error = function(e) e
   )
 
@@ -932,7 +954,16 @@ send_ai_request <- function(prompt, task, question, context, settings) {
     ))
   }
 
+  blocked <- list(
+    ok = FALSE,
+    status = "blocked_external_send",
+    message = "This provider sends your prompt to another computer, but external-send approval is unchecked. Review the prompt for private data, then explicitly approve sending."
+  )
+
   if (provider == "ollama") {
+    if (!ai_is_local_endpoint(ai_ollama_endpoint(settings$endpoint)) && !isTRUE(settings$allow_external)) {
+      return(blocked)
+    }
     return(ai_ollama_generate(prompt, settings))
   }
 
@@ -946,11 +977,7 @@ send_ai_request <- function(prompt, task, question, context, settings) {
 
   local_openai <- provider %in% c("openai", "generic_openai") && ai_is_local_endpoint(settings$endpoint)
   if (provider %in% c("openai", "anthropic", "generic_openai") && !local_openai && !isTRUE(settings$allow_external)) {
-    return(list(
-      ok = FALSE,
-      status = "blocked_external_send",
-      message = "Online provider selected, but external-send approval is unchecked. Review the prompt for private data, then explicitly approve sending before a live adapter can use it."
-    ))
+    return(blocked)
   }
 
   if (provider %in% c("openai", "generic_openai")) {

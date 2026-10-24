@@ -431,4 +431,195 @@ check("LaTeX formulas line up with plain-text formulas",
 formula_html <- as.character(env$render_formula_items("Mean: xbar = sum(x) / n", "\\bar{x}"))
 check("formula with LaTeX gets a typeset block", grepl("formula-math", formula_html, fixed = TRUE))
 
+# Verified calculator regressions (items 1-17).
+shiny::testServer(env$register_calculator_server, {
+  session$setInputs(fn = "chiSqGoodnessFit", gof_pasted_table = "A 90\nB 10",
+                    expected_probs = "0.9, 0.1", observed = "10, 10",
+                    categories = "A, B", alpha = "0.05", claim = "the proportions match", run = 1)
+  check("1 pasted GOF uses expected probabilities",
+        grepl("Test Statistic\\s+:\\s+0\\.000000", output$result))
+  gof_code <- eval(parse(text = output$rcode_used), new.env(parent = globalenv()))
+  check("6 GOF code uses pasted counts and expected probabilities", unname(gof_code$statistic) == 0)
+  session$setInputs(gof_pasted_table = "", observed = "90, 10", run = 2)
+  check("1 manual GOF uses expected probabilities",
+        grepl("Test Statistic\\s+:\\s+0\\.000000", output$result))
+  check("6 manual GOF code uses expected probabilities",
+        unname(eval(parse(text = output$rcode_used))$statistic) == 0)
+  session$setInputs(expected_probs = "", run = 3)
+  check("1 blank expected probabilities still means equal probabilities",
+        grepl("Test Statistic\\s+:\\s+64\\.000000", output$result))
+
+  session$setInputs(fn = "selectedPercent", frequency_pasted_table = "not a count table",
+                    frequencies = "5, 5", categories = "A, B", selected_positions = "1", run = 4)
+  check("2 invalid pasted frequencies report the parse error",
+        grepl("Input error: The pasted table does not contain observed counts.", output$result, fixed = TRUE))
+  session$setInputs(frequency_pasted_table = "1 90\n2 10", run = 5)
+  check("2 numeric category labels use pasted counts",
+        grepl("Percent\\s+:\\s+90\\.000000%", output$result))
+  session$setInputs(frequency_pasted_table = "", run = 6)
+  check("2 empty pasted frequencies still use manual counts",
+        grepl("Percent\\s+:\\s+50\\.000000%", output$result))
+
+  session$setInputs(fn = "chiSqIndependence", pasted_table = "Yes No\nA 3 7\nB 8 2",
+                    matrix_vals = "1, 2, 3, 4", nrow = 2,
+                    row_names = "A,B", col_names = "Yes,No", run = 7)
+  code_env <- new.env(parent = globalenv())
+  independence_code <- suppressWarnings(eval(parse(text = output$rcode_used), code_env))
+  expected_table <- matrix(c(3, 7, 8, 2), 2, byrow = TRUE)
+  check("6 independence code uses pasted table without continuity correction",
+        identical(unname(code_env$observed), expected_table) &&
+          isTRUE(all.equal(unname(independence_code$statistic),
+                           unname(suppressWarnings(chisq.test(expected_table, correct = FALSE))$statistic))))
+  session$setInputs(pasted_table = "", run = 8)
+  suppressWarnings(eval(parse(text = output$rcode_used), code_env))
+  check("6 independence code retains manual input path",
+        identical(unname(code_env$observed), matrix(c(1, 2, 3, 4), 2, byrow = TRUE)))
+
+  for (question in c("exact", "less", "greater", "between")) {
+    session$setInputs(fn = "normalProb", mean_val = 0, sd_val = 1,
+                      prob_type = question, lower = "-1", upper = "2", exact_value = "1", run = 9)
+    bounds <- env$probability_bounds(question, "-1", "2", "1")
+    actual <- eval(parse(text = output$rcode_used), new.env(parent = globalenv()))
+    check(paste("7 normal code uses selected", question, "bounds"),
+          isTRUE(all.equal(actual, pnorm(bounds$upper) - pnorm(bounds$lower))))
+  }
+
+  for (sample in c(FALSE, TRUE)) {
+    session$setInputs(fn = "groupedStats", midpoints = "1, 3", frequencies = "2, 2",
+                      sample = sample, run = 10)
+    code_env <- new.env(parent = globalenv())
+    eval(parse(text = output$rcode_used), code_env)
+    check(paste("8 grouped variance code respects sample =", sample),
+          isTRUE(all.equal(code_env$grouped_variance, if (sample) 4 / 3 else 1)))
+  }
+  session$setInputs(fn = "percentToCount", total = 10, percent = 150, run = 11)
+  check("12 percent to count UI rejects percent above 100",
+        grepl("Input error:", output$result, fixed = TRUE))
+})
+
+contingency_cases <- list(
+  list("Group  Yes  No\nGroup 1  10  20\nGroup 2  30  40",
+       c("Group 1", "Group 2"), c("Yes", "No"), c(10, 20, 30, 40)),
+  list("A  B  C\nX  3  7  10\nY  2  4  6",
+       c("X", "Y"), c("A", "B", "C"), c(3, 7, 10, 2, 4, 6)),
+  list("Low  Medium  High  Total\nX  10  20  30  60\nY  20  40  60  120",
+       c("X", "Y"), c("Low", "Medium", "High"), c(10, 20, 30, 20, 40, 60)),
+  list("Yes No\nGroup 1  10  20\nGroup 2  5  6",
+       c("Group 1", "Group 2"), c("Yes", "No"), c(10, 20, 5, 6)),
+  list("Gender Yes No\nMale 3 7\nFemale 10 4",
+       c("Male", "Female"), c("Yes", "No"), c(3, 7, 10, 4)),
+  list("Yes No Total\nA 3 7 10\nB 4 4 8\nTotal 7 11 18",
+       c("A", "B"), c("Yes", "No"), c(3, 7, 4, 4))
+)
+for (i in seq_along(contingency_cases)) {
+  case <- contingency_cases[[i]]
+  expected <- matrix(case[[4]], 2, byrow = TRUE, dimnames = list(case[[2]], case[[3]]))
+  check(paste("3 contingency table example", i),
+        identical(env$parse_contingency_table_text(case[[1]]), expected))
+}
+for (separator in c("\t", ",", "  ")) {
+  text <- paste(c(paste(c("Group", "Yes", "No"), collapse = separator),
+                  paste(c("Group 1", "10", "20"), collapse = separator),
+                  paste(c("Group 2", "30", "40"), collapse = separator)), collapse = "\n")
+  check("3 contingency table separates labels and counts by fields",
+        identical(env$parse_contingency_table_text(text),
+                  matrix(c(10, 20, 30, 40), 2, byrow = TRUE,
+                         dimnames = list(c("Group 1", "Group 2"), c("Yes", "No")))))
+}
+check("3 total header is case insensitive",
+      ncol(env$parse_contingency_table_text("Yes No tOtAl\nA 3 7 10\nB 4 4 8")) == 2)
+
+for (bounds in list(c(2, 3), c(-0.5, 0.5), c(-1, 1), c(0, 2))) {
+  output <- paste(capture.output(env$chebyshevCalc(0, 1, "percent_between",
+                                                lower = bounds[1], upper = bounds[2])), collapse = "\n")
+  check("4 Chebyshev gives no useful minimum for off-center or narrow intervals",
+        grepl("no useful minimum", output, fixed = TRUE) &&
+          grepl("At Least\\s+:\\s+0\\.000000%", output))
+}
+check("4 Chebyshev still bounds centered intervals",
+      any(grepl("At Least\\s+:\\s+75\\.000000%",
+                capture.output(env$chebyshevCalc(0, 1, "percent_between", lower = -2, upper = 3)))))
+expect_error("4 Chebyshev rejects zero sd", env$chebyshevCalc(0, 0, "percent_between", lower = -2, upper = 2), "Standard deviation must be greater than 0")
+
+for (case in list(c(1, 2, 13.5), c(-2, -1, 13.5), c(-1, 2, 81.5), c(-3, 3, 99.7),
+                  c(0, 1, 34), c(0, 0, 0), c(3, Inf, 0.15), c(-Inf, -3, 0.15))) {
+  output <- capture.output(env$empiricalRuleCalc(0, 1, case[1], case[2]))
+  check("5 empirical rule sums the correct halves and tails",
+        any(grepl(sprintf("%10.6f%%", case[3]), output, fixed = TRUE)))
+}
+expect_error("5 empirical rule rejects fractional sd bounds", env$empiricalRuleCalc(0, 1, 0.5, 2), "Use the normal probability calculator")
+expect_error("5 empirical rule rejects finite bounds beyond three sd", env$empiricalRuleCalc(0, 1, 1, 4), "Use the normal probability calculator")
+expect_error("5 empirical rule rejects zero sd", env$empiricalRuleCalc(0, 0, -1, 1), "Standard deviation must be greater than 0")
+expect_error("5 empirical rule rejects reversed bounds", env$empiricalRuleCalc(0, 1, 2, 1), "less than or equal")
+
+expect_error("9 EMV rejects probabilities that do not sum to one", env$expectedMonetaryValueCalc(c(100, 0), c(0.2, 0.2)), "Probabilities must add to 1")
+check("9 EMV accepts probability sum within tolerance",
+      env$capture_calculator_result(env$expectedMonetaryValueCalc(c(100, 0), c(0.5, 0.5000005)))$ok)
+
+for (counts in list(c(-1, 2, 0, 10), c(1.5, 2, 0, 10), c(2, -1, 0, 10),
+                    c(2, 1.5, 0, 10), c(2, 2, -1, 10), c(2, 2, 0.5, 10),
+                    c(2, 2, 0, 0), c(2, 2, 0, 3.5))) {
+  expect_error("10 addition rule rejects invalid counts", do.call(env$additionRuleCalc, as.list(counts)), "whole number")
+}
+expect_error("10 addition rule rejects overlap above A", env$additionRuleCalc(1, 3, 2, 10), "Overlap count cannot exceed")
+expect_error("10 addition rule rejects overlap above B", env$additionRuleCalc(3, 1, 2, 10), "Overlap count cannot exceed")
+expect_error("10 addition rule rejects union above total", env$additionRuleCalc(8, 8, 0, 10), "Union count cannot exceed")
+check("10 addition rule allows empty events", env$capture_calculator_result(env$additionRuleCalc(0, 0, 0, 10))$ok)
+
+table_counts <- matrix(c(-1, 2, 0, 0), 2, byrow = TRUE,
+                       dimnames = list(c("A", "B"), c("X", "Y")))
+expect_error("11 table probability rejects negative counts", env$tableProbabilityCalc(table_counts, "A", "X", "joint"), "nonnegative")
+table_counts[1, 1] <- 1
+expect_error("11 table probability rejects empty conditional row", env$tableProbabilityCalc(table_counts, "B", "X", "given_row"), "Denominator must be greater than 0")
+table_counts[, 1] <- 0
+expect_error("11 table probability rejects empty conditional column", env$tableProbabilityCalc(table_counts, "A", "X", "given_column"), "Denominator must be greater than 0")
+table_counts[,] <- 0
+expect_error("11 table probability rejects empty table", env$tableProbabilityCalc(table_counts, "A"), "Denominator must be greater than 0")
+expect_error("12 percent amount rejects zero total", env$percentAmountCalc(0, 50), "Total must be greater than 0")
+expect_error("12 percent amount rejects negative percent", env$percentAmountCalc(10, -1), "between 0 and 1")
+expect_error("12 percent amount rejects percent above 100", env$percentAmountCalc(10, 150), "between 0 and 1")
+check("12 percent amount allows endpoints", all(vapply(c(0, 100), function(p) env$capture_calculator_result(env$percentAmountCalc(10, p))$ok, logical(1))))
+
+expect_error("13 confidence and alpha must agree", resolve_conf_alpha(0.95, 0.1), "Enter either a confidence level or alpha, not two values that disagree.")
+check("13 confidence and alpha allow matching values", identical(resolve_conf_alpha(0.95, 0.05), list(conf_level = 0.95, alpha = 0.05)))
+check("13 confidence and alpha allow rounding tolerance", identical(resolve_conf_alpha(0.95, 0.05 + 5e-10)$conf_level, 0.95))
+check("14 coefficient of variation accepts zero sd",
+      any(grepl("CV\\s+:\\s+0\\.000000%", capture.output(coeffVariation(10, 0)))))
+expect_error("14 coefficient of variation still rejects negative sd", coeffVariation(10, -1), "Standard deviation must be 0 or greater")
+for (success in 0:1) {
+  for (size in 0:1) {
+    result <- env$capture_calculator_result(env$hypergeometricCalc(1, success, size, "expected"))
+    check("15 singleton hypergeometric has zero sd", identical(result$values$standard_deviation, 0))
+  }
+}
+
+tail_result <- env$capture_calculator_result(chiSqGoodnessFit(c(100, 0)))
+check("16 GOF retains tiny upper-tail p value",
+      tail_result$values$p_value > 0 && abs(tail_result$values$p_value / pchisq(100, 1, lower.tail = FALSE) - 1) < 1e-12)
+for (case in list(
+  list(quote(meanKnownSigmaTest(100, 10, 0, 10, alternative = "greater")), pnorm(10, lower.tail = FALSE)),
+  list(quote(meanTTest(100, 10, 0, 1, alternative = "greater")), pt(100, 99, lower.tail = FALSE)),
+  list(quote(env$varianceTestCalc(11, 10, 1, alternative = "two.sided")), 2 * pchisq(1000, 10, lower.tail = FALSE)),
+  list(quote(env$twoVarianceRatioCalc(10, 1e6, 10, 1, alternative = "two.sided")), 2 * pf(1e6, 9, 9, lower.tail = FALSE))
+)) {
+  result <- env$capture_calculator_result(eval(case[[1]]))
+  check("16 continuous tests retain tiny upper tails", result$ok && result$values$p_value > 0 &&
+          abs(result$values$p_value / case[[2]] - 1) < 1e-12)
+}
+for (case in list(
+  list(quote(env$binomialCalc(100, 0.5, "greater", 95)), pbinom(95, 100, 0.5, lower.tail = FALSE)),
+  list(quote(env$poissonCalc(1, 1, "greater_equal", 31)), ppois(30, 1, lower.tail = FALSE)),
+  list(quote(env$hypergeometricCalc(200, 100, 100, "greater", 95)), phyper(95, 100, 100, 100, lower.tail = FALSE))
+)) {
+  result <- env$capture_calculator_result(eval(case[[1]]))
+  check("16 discrete calculators retain tiny upper tails", result$ok && result$values$probability > 0 &&
+          abs(result$values$probability / case[[2]] - 1) < 1e-12)
+}
+check("16 no subtractive upper-tail calls remain in calculator source or generated code",
+      !any(vapply(c("R/statistics_core.R", "R/calculator_helpers.R", "R/server_calculators.R"),
+                  function(path) any(grepl("1\\s*-\\s*p(norm|t|chisq|f|binom|pois|hyper)\\(", readLines(path))), logical(1))))
+check("17 pasted numbers accept scientific notation",
+      identical(env$parse_data_numbers("1e3, 2e3, -2.5E-2, +.5e+2, 3.e1, \u22124e-1"),
+                c(1000, 2000, -0.025, 50, 30, -0.4)))
+
 cat("Calculator reliability checks passed\n")

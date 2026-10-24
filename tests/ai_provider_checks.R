@@ -199,4 +199,24 @@ if (.Platform$OS.type == "unix") {
   check("CLI args stay intact", grepl("ARG[x y]", cli$message, fixed = TRUE))
 }
 
+check("user-info trick is not local", !ai_is_local_endpoint("https://localhost:123@attacker.example/v1"))
+check("IPv6 loopback with port is local", ai_is_local_endpoint("http://[::1]:8080/v1"))
+check("non-URL is not local", !ai_is_local_endpoint("localhost:1234"))
+remote_ollama <- send_ai_request("p", "concept", "q", "", ai_provider_settings("ollama", "m", "http://remote.example:11434", "", "", FALSE))
+check("remote Ollama needs send approval", identical(remote_ollama$status, "blocked_external_send"))
+
+if (.Platform$OS.type == "unix") {
+  failing_cli <- tempfile("failing-cli-")
+  writeLines(c("#!/bin/sh", "exit 1"), failing_cli)
+  Sys.chmod(failing_cli, "755")
+  check("CLI check reports a failing command", identical(ai_cli_check(failing_cli, "Test CLI")$status, "cli_check_failed"))
+  tilde_dir <- file.path(path.expand("~"), paste0(".statguide-test-", Sys.getpid()))
+  dir.create(tilde_dir)
+  writeLines(c("#!/bin/sh", "echo ran"), file.path(tilde_dir, "cli"))
+  Sys.chmod(file.path(tilde_dir, "cli"), "755")
+  tilde_result <- ai_cli_run(file.path("~", basename(tilde_dir), "cli"), "x")
+  unlink(tilde_dir, recursive = TRUE)
+  check("CLI path starting with ~ runs", isTRUE(tilde_result$ok))
+}
+
 cat("AI provider checks passed\n")

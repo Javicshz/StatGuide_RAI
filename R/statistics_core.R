@@ -116,6 +116,9 @@ resolve_conf_alpha <- function(conf_level = NULL, alpha = NULL) {
   } else {
     conf_level <- require_conf_level(conf_level)
     alpha <- require_alpha(alpha)
+    if (abs(conf_level - (1 - alpha)) > 1e-9) {
+      stop("Enter either a confidence level or alpha, not two values that disagree.")
+    }
   }
   list(conf_level = conf_level, alpha = alpha)
 }
@@ -582,7 +585,7 @@ descStats <- function(data, sample = TRUE) {
 
 coeffVariation <- function(mean_val, sd_val) {
   mean_val <- require_num(mean_val, "Mean")
-  sd_val <- require_positive_num(sd_val, "Standard deviation")
+  sd_val <- require_nonnegative_num(sd_val, "Standard deviation")
   if (mean_val == 0) {
     stop("Mean cannot be 0.")
   }
@@ -1438,7 +1441,7 @@ meanKnownSigmaTest <- function(n, xbar, mu0, sigma, alpha = 0.05,
     p_value <- pnorm(z)
     critical <- qnorm(alpha)
   } else if (alternative == "greater") {
-    p_value <- 1 - pnorm(z)
+    p_value <- pnorm(z, lower.tail = FALSE)
     critical <- qnorm(1 - alpha)
   } else {
     stop("Unknown alternative.")
@@ -1498,7 +1501,7 @@ meanTTest <- function(n, xbar, mu0, s, alpha = 0.05,
     p_value <- pt(t_stat, df)
     critical <- qt(alpha, df)
   } else if (alternative == "greater") {
-    p_value <- 1 - pt(t_stat, df)
+    p_value <- pt(t_stat, df, lower.tail = FALSE)
     critical <- qt(1 - alpha, df)
   } else {
     stop("Unknown alternative.")
@@ -1562,7 +1565,7 @@ onePropTest <- function(x, n, p0, alpha = 0.05,
     p_value <- pnorm(z)
     critical <- qnorm(alpha)
   } else if (alternative == "greater") {
-    p_value <- 1 - pnorm(z)
+    p_value <- pnorm(z, lower.tail = FALSE)
     critical <- qnorm(1 - alpha)
   } else {
     stop("Unknown alternative.")
@@ -1694,7 +1697,7 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2, conf_level = N
     p_value <- pnorm(z_stat)
   } else if (alternative == "greater") {
     z_critical <- qnorm(1 - alpha)
-    p_value <- 1 - pnorm(z_stat)
+    p_value <- pnorm(z_stat, lower.tail = FALSE)
   } else {
     stop("Unknown alternative.")
   }
@@ -1800,7 +1803,7 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
     p_value <- pt(t_stat, df)
   } else if (alternative == "greater") {
     t_critical <- qt(1 - alpha, df)
-    p_value <- 1 - pt(t_stat, df)
+    p_value <- pt(t_stat, df, lower.tail = FALSE)
   } else {
     stop("Unknown alternative.")
   }
@@ -1920,7 +1923,7 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
     p_value <- pt(t_stat, df)
   } else if (alternative == "greater") {
     t_critical <- qt(1 - alpha, df)
-    p_value <- 1 - pt(t_stat, df)
+    p_value <- pt(t_stat, df, lower.tail = FALSE)
   } else {
     stop("Unknown alternative.")
   }
@@ -2136,7 +2139,7 @@ chi_square_table_parts <- function(observed_table, alpha) {
   chi_components <- (observed_table - expected_table)^2 / expected_table
   statistic <- sum(chi_components)
   df <- (nrow(observed_table) - 1) * (ncol(observed_table) - 1)
-  p_value <- 1 - pchisq(statistic, df)
+  p_value <- pchisq(statistic, df, lower.tail = FALSE)
   list(
     observed_table = observed_table,
     expected_table = expected_table,
@@ -2254,7 +2257,7 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
     p_value <- pnorm(z_stat)
   } else if (alternative == "greater") {
     z_critical <- qnorm(1 - alpha)
-    p_value <- 1 - pnorm(z_stat)
+    p_value <- pnorm(z_stat, lower.tail = FALSE)
   } else {
     stop("Unknown alternative.")
   }
@@ -2401,7 +2404,7 @@ chiSqGoodnessFit <- function(observed, expected_probs = NULL, expected_counts = 
   test_stat <- sum(chi_components)
   df <- length(observed) - 1
   critical_value <- qchisq(1 - alpha, df)
-  p_value <- 1 - pchisq(test_stat, df)
+  p_value <- pchisq(test_stat, df, lower.tail = FALSE)
 
   if (p_value < alpha) {
     decision <- "Reject"

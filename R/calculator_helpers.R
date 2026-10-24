@@ -52,7 +52,7 @@ parse_optional_num <- function(text) {
 }
 
 parse_data_numbers <- function(text) {
-  number_pattern <- "[-+]?[0-9]*\\.?[0-9]+"
+  number_pattern <- "[-+]?(?:[0-9]+\\.?[0-9]*|\\.[0-9]+)(?:[eE][-+]?[0-9]+)?"
   matches <- gregexpr(number_pattern, gsub("\u2212", "-", text), perl = TRUE)[[1]]
   if (matches[1] < 0) {
     return(numeric(0))
@@ -266,6 +266,9 @@ independentProbabilityCalc <- function(probabilities) {
 
 tableProbabilityCalc <- function(table_data, row_name = "", col_name = "", mode = "row") {
   table_data <- as.matrix(table_data)
+  if (any(!is.finite(table_data)) || any(table_data < 0)) {
+    stop("Table counts must be nonnegative finite numbers.")
+  }
   grand_total <- sum(table_data)
   row_name <- trimws(row_name)
   col_name <- trimws(col_name)
@@ -300,6 +303,8 @@ tableProbabilityCalc <- function(table_data, row_name = "", col_name = "", mode 
     stop("Unknown table probability mode.")
   }
 
+  require_positive_num(grand_total, "Denominator")
+
   cat("--------------------------------------------------\n")
   cat("Table Probability\n")
   cat("--------------------------------------------------\n")
@@ -312,7 +317,17 @@ tableProbabilityCalc <- function(table_data, row_name = "", col_name = "", mode 
 }
 
 additionRuleCalc <- function(a_count, b_count, overlap_count, total_count) {
+  a_count <- require_whole_num(a_count, "A count", 0)
+  b_count <- require_whole_num(b_count, "B count", 0)
+  overlap_count <- require_whole_num(overlap_count, "Overlap count", 0)
+  total_count <- require_whole_num(total_count, "Total count", 1)
+  if (overlap_count > min(a_count, b_count)) {
+    stop("Overlap count cannot exceed either event count.")
+  }
   favorable <- a_count + b_count - overlap_count
+  if (favorable > total_count) {
+    stop("Union count cannot exceed total count.")
+  }
   probability <- favorable / total_count
   cat("--------------------------------------------------\n")
   cat("Addition Rule Probability\n")
@@ -480,6 +495,8 @@ selectedPercentCalc <- function(frequencies, categories = NULL, selected = NULL)
 }
 
 percentAmountCalc <- function(total, percent) {
+  total <- require_positive_num(total, "Total")
+  percent <- require_probability_num(percent / 100, "Percent / 100") * 100
   amount <- total * percent / 100
   cat("--------------------------------------------------\n")
   cat("Percent to Amount\n")
@@ -563,19 +580,24 @@ groupedStatsCalc <- function(midpoints, frequencies, sample = FALSE) {
 }
 
 empiricalRuleCalc <- function(mean_val, sd_val, lower, upper) {
-  k_lower <- abs(lower - mean_val) / sd_val
-  k_upper <- abs(upper - mean_val) / sd_val
-  k <- min(k_lower, k_upper)
-  percent <- if (abs(k - 1) < 1e-6) 68 else if (abs(k - 2) < 1e-6) 95 else if (abs(k - 3) < 1e-6) 99.7 else NA
+  mean_val <- require_num(mean_val, "Mean")
+  sd_val <- require_positive_num(sd_val, "Standard deviation")
+  bounds <- require_between_values(lower, upper)
+  z <- (c(bounds$lower, bounds$upper) - mean_val) / sd_val
+  finite_z <- z[is.finite(z)]
+  if (any(abs(finite_z) > 3 + 1e-6 | abs(finite_z - round(finite_z)) > 1e-6)) {
+    stop("Empirical rule bounds must be whole numbers of standard deviations (0 to 3) from the mean. Use the normal probability calculator for other bounds.")
+  }
+  halves <- c(0, 34, 47.5, 49.85)
+  areas <- sign(z) * 50
+  areas[is.finite(z)] <- sign(finite_z) * halves[as.integer(round(abs(finite_z))) + 1L]
+  percent <- diff(areas)
+  k <- min(abs(z))
   cat("--------------------------------------------------\n")
   cat("Empirical Rule\n")
   cat("--------------------------------------------------\n")
   cat(sprintf("%-25s: %10.6f\n", "k Standard Deviations", k))
-  if (is.na(percent)) {
-    cat("The interval is not exactly 1, 2, or 3 standard deviations from the mean.\n")
-  } else {
-    cat(sprintf("%-25s: %10.6f%%\n", "Approx Percent", percent))
-  }
+  cat(sprintf("%-25s: %10.6f%%\n", "Approx Percent", percent))
   cat("--------------------------------------------------\n")
 }
 
@@ -619,6 +641,8 @@ missingFromMeanCalc <- function(known_values, total_n, target_mean) {
 }
 
 chebyshevCalc <- function(mean_val, sd_val, mode, k = NULL, percent = NULL, lower = NULL, upper = NULL) {
+  mean_val <- require_num(mean_val, "Mean")
+  sd_val <- require_positive_num(sd_val, "Standard deviation")
   if (mode == "range_from_k") {
     k <- require_num(k, "k")
     chebyshevRange(mean_val, sd_val, k)
@@ -632,10 +656,12 @@ chebyshevCalc <- function(mean_val, sd_val, mode, k = NULL, percent = NULL, lowe
   }
   lower <- require_num(lower, "Lower value")
   upper <- require_num(upper, "Upper value")
-  k <- min(abs(lower - mean_val), abs(upper - mean_val)) / sd_val
-  percent <- (1 - 1 / k^2) * 100
+  require_between_values(lower, upper)
+  k <- min(mean_val - lower, upper - mean_val) / sd_val
+  percent <- if (k > 1) (1 - 1 / k^2) * 100 else 0
   cat("--------------------------------------------------\n")
   cat("Chebyshev Minimum Percent\n")
+  if (k <= 1) cat("Chebyshev gives no useful minimum for this interval (0%).\n")
   cat("--------------------------------------------------\n")
   cat(sprintf("%-25s: %10.6f\n", "k", k))
   cat(sprintf("%-25s: %10.6f%%\n", "At Least", percent))
@@ -924,8 +950,8 @@ varianceTestCalc <- function(n, s, sigma0, alpha = 0.05, alternative = "two.side
   statistic <- df * s^2 / sigma0^2
   p_value <- switch(alternative,
     less = pchisq(statistic, df),
-    greater = 1 - pchisq(statistic, df),
-    two.sided = 2 * min(pchisq(statistic, df), 1 - pchisq(statistic, df)),
+    greater = pchisq(statistic, df, lower.tail = FALSE),
+    two.sided = 2 * min(pchisq(statistic, df), pchisq(statistic, df, lower.tail = FALSE)),
     stop("Unknown alternative.")
   )
   p_value <- min(p_value, 1)
@@ -1022,8 +1048,8 @@ twoVarianceRatioCalc <- function(n1, var1, n2, var2, conf_level = NULL, alpha = 
   f_stat <- var1 / var2
   p_value <- switch(alternative,
     less = pf(f_stat, df1, df2),
-    greater = 1 - pf(f_stat, df1, df2),
-    two.sided = 2 * min(pf(f_stat, df1, df2), 1 - pf(f_stat, df1, df2)),
+    greater = pf(f_stat, df1, df2, lower.tail = FALSE),
+    two.sided = 2 * min(pf(f_stat, df1, df2), pf(f_stat, df1, df2, lower.tail = FALSE)),
     stop("Unknown alternative.")
   )
   p_value <- min(p_value, 1)
@@ -1172,6 +1198,9 @@ expectedMonetaryValueCalc <- function(outcomes, probabilities) {
   if (length(outcomes) != length(probabilities)) {
     stop("Outcomes and probabilities must have the same number of entries.")
   }
+  if (abs(sum(probabilities) - 1) > 1e-6) {
+    stop("Probabilities must add to 1.")
+  }
   expected_value <- sum(outcomes * probabilities)
   cat("--------------------------------------------------\n")
   cat("Expected Monetary Value\n")
@@ -1245,8 +1274,8 @@ binomialCalc <- function(n, p, type, value, upper_value = NULL) {
     equal = dbinom(value, n, p),
     less = pbinom(value - 1, n, p),
     less_equal = pbinom(value, n, p),
-    greater = 1 - pbinom(value, n, p),
-    greater_equal = 1 - pbinom(value - 1, n, p),
+    greater = pbinom(value, n, p, lower.tail = FALSE),
+    greater_equal = pbinom(value - 1, n, p, lower.tail = FALSE),
     between = {
       upper_value <- require_whole_num(upper_value, "Upper value", 0)
       require_between_values(value, upper_value, "Value", "Upper value")
@@ -1290,8 +1319,8 @@ poissonCalc <- function(rate, periods, type, value, upper_value = NULL) {
     equal = dpois(value, lambda),
     less = ppois(value - 1, lambda),
     less_equal = ppois(value, lambda),
-    greater = 1 - ppois(value, lambda),
-    greater_equal = 1 - ppois(value - 1, lambda),
+    greater = ppois(value, lambda, lower.tail = FALSE),
+    greater_equal = ppois(value - 1, lambda, lower.tail = FALSE),
     between = {
       upper_value <- require_whole_num(upper_value, "Upper value", 0)
       require_between_values(value, upper_value, "Value", "Upper value")
@@ -1339,7 +1368,7 @@ hypergeometricCalc <- function(total_items, success_items, sample_size, type, va
     stop("Sample size cannot be larger than total items.")
   }
   expected_value <- sample_size * success_items / total_items
-  sd_value <- sqrt(sample_size * (success_items / total_items) * (1 - success_items / total_items) *
+  sd_value <- if (total_items == 1) 0 else sqrt(sample_size * (success_items / total_items) * (1 - success_items / total_items) *
                      ((total_items - sample_size) / (total_items - 1)))
 
   probability <- NULL
@@ -1350,8 +1379,8 @@ hypergeometricCalc <- function(total_items, success_items, sample_size, type, va
       equal = dhyper(value, success_items, failure_items, sample_size),
       less = phyper(value - 1, success_items, failure_items, sample_size),
       less_equal = phyper(value, success_items, failure_items, sample_size),
-      greater = 1 - phyper(value, success_items, failure_items, sample_size),
-      greater_equal = 1 - phyper(value - 1, success_items, failure_items, sample_size),
+      greater = phyper(value, success_items, failure_items, sample_size, lower.tail = FALSE),
+      greater_equal = phyper(value - 1, success_items, failure_items, sample_size, lower.tail = FALSE),
       between = {
         upper_value <- require_whole_num(upper_value, "Upper value", 0)
         require_between_values(value, upper_value, "Value", "Upper value")
@@ -1458,91 +1487,47 @@ parse_contingency_table_text <- function(text) {
 
   lines <- trimws(unlist(strsplit(text, "\n+")))
   lines <- lines[nzchar(lines)]
-  number_pattern <- "[-+]?[0-9]*\\.?[0-9]+"
-  data_line <- grepl(number_pattern, lines)
+  fields <- lapply(lines, split_table_header)
+  numeric_fields <- lapply(fields, function(parts) suppressWarnings(as.numeric(parts)))
+  data_line <- vapply(numeric_fields, function(nums) !is.na(tail(nums, 1)), logical(1))
   if (!any(data_line)) {
     stop("The pasted table does not contain any numeric counts.")
   }
-
   first_data_index <- which(data_line)[1]
-  header_line <- if (first_data_index > 1) lines[first_data_index - 1] else ""
-  header_parts <- split_table_header(header_line)
-
-  total_in_header <- any(tolower(header_parts) == "total")
-  if (total_in_header) {
-    total_index <- which(tolower(header_parts) == "total")[1]
-    possible_cols <- header_parts[seq_len(total_index - 1)]
-    if (length(possible_cols) > 2 && !grepl(number_pattern, possible_cols[1])) {
-      column_labels <- possible_cols[-1]
-    } else {
-      column_labels <- possible_cols
-    }
-    count_with_total <- length(column_labels) + 1
-  } else {
-    column_labels <- header_parts
-    count_with_total <- NA_integer_
-    if (length(header_parts)) {
-      data_rows <- lines[data_line & !grepl("^total([[:space:],]|$)", lines, ignore.case = TRUE)]
-      number_counts <- lengths(regmatches(data_rows, gregexpr(number_pattern, data_rows, perl = TRUE)))
-      if (length(number_counts) && all(number_counts == length(header_parts) - 1)) {
-        column_labels <- header_parts[-1]
-      }
-      count_with_total <- length(column_labels)
-    }
-  }
-
-  row_labels <- c()
+  header <- if (first_data_index > 1) fields[[first_data_index - 1]] else character(0)
+  row_labels <- character(0)
   rows <- list()
-
-  for (line in lines[data_line]) {
-    matches <- gregexpr(number_pattern, line, perl = TRUE)[[1]]
-    nums <- as.numeric(regmatches(line, list(matches))[[1]])
-
-    count_to_take <- if (!is.na(count_with_total) && length(nums) >= count_with_total) {
-      count_with_total
-    } else {
-      length(nums)
-    }
-    count_start_match <- matches[length(matches) - count_to_take + 1]
-    label <- trimws(substr(line, 1, count_start_match - 1))
-    label <- sub("[,\t]+$", "", label)
-    nums <- tail(nums, count_to_take)
-
-    if (!nzchar(label)) {
-      label <- paste("Row", length(rows) + 1)
-    }
-    if (tolower(label) == "total") {
-      next
-    }
-    rows[[length(rows) + 1]] <- nums
+  for (i in which(data_line)) {
+    nums <- numeric_fields[[i]]
+    last_label <- if (anyNA(nums)) max(which(is.na(nums))) else 0L
+    label <- paste(head(fields[[i]], last_label), collapse = " ")
+    if (tolower(label) == "total") next
+    if (!nzchar(label)) label <- paste("Row", length(rows) + 1)
+    rows[[length(rows) + 1]] <- nums[seq.int(last_label + 1L, length(nums))]
     row_labels <- c(row_labels, label)
   }
-
   if (!length(rows)) {
     stop("No observed-count rows were found after removing totals.")
   }
-
   column_count <- unique(lengths(rows))
   if (length(column_count) != 1) {
     stop("Rows have different numbers of counts. Check the pasted table formatting.")
   }
-
-  drop_total <- total_in_header || (length(rows) >= 2 && all(vapply(rows, function(nums) {
-    length(nums) >= 2 && isTRUE(all.equal(sum(nums[-length(nums)]), nums[length(nums)]))
-  }, logical(1))))
+  column_labels <- if (length(header) == column_count + 1) header[-1] else header
+  drop_total <- (length(column_labels) == column_count && tolower(tail(column_labels, 1)) == "total") ||
+    (!length(header) && length(rows) >= 2 && all(vapply(rows, function(nums) {
+      length(nums) >= 2 && isTRUE(all.equal(sum(nums[-length(nums)]), tail(nums, 1)))
+    }, logical(1))))
   if (drop_total) {
-    rows <- lapply(rows, function(nums) nums[-length(nums)])
+    rows <- lapply(rows, function(nums) head(nums, -1))
+    column_labels <- head(column_labels, -1)
   }
-
   observed <- matrix(unlist(rows), nrow = length(rows), byrow = TRUE)
   rownames(observed) <- row_labels
-  if (length(column_labels) == ncol(observed) + 1 && !grepl(number_pattern, column_labels[1])) {
-    column_labels <- column_labels[-1]
-  }
-  if (length(column_labels) == ncol(observed)) {
-    colnames(observed) <- column_labels
+  colnames(observed) <- if (length(column_labels) == ncol(observed)) {
+    column_labels
   } else {
-    colnames(observed) <- paste("Column", seq_len(ncol(observed)))
+    paste("Column", seq_len(ncol(observed)))
   }
   observed
 }
@@ -1588,7 +1573,7 @@ parse_gof_table_text <- function(text) {
   for (line in lines[data_line]) {
     matches <- gregexpr(number_pattern, line, perl = TRUE)[[1]]
     nums <- as.numeric(gsub("%", "", regmatches(line, list(matches))[[1]]))
-    label <- trimws(substr(line, 1, matches[1] - 1))
+    label <- trimws(substr(line, 1, tail(matches, 1) - 1))
     label <- sub("[,\t]+$", "", label)
 
     if (!nzchar(label)) {

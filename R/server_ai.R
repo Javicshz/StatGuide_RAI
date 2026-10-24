@@ -58,7 +58,7 @@ register_ai_server <- function(input, output, session) {
       models <- isolate(online_models())
       choices <- c("Type model manually" = "", stats::setNames(models, models))
       return(tagList(
-        textInput("ai_endpoint", "Endpoint URL", isolate(guide_endpoint()), placeholder = if (provider == "anthropic") "Default: https://api.anthropic.com/v1" else "Default: https://api.openai.com/v1"),
+        textInput("ai_endpoint", "Endpoint URL", if (provider == "generic_openai") isolate(guide_endpoint()) else "", placeholder = if (provider == "anthropic") "Default: https://api.anthropic.com/v1" else "Default: https://api.openai.com/v1"),
         textInput("ai_key_env", "API key environment variable", "", placeholder = if (provider == "anthropic") "ANTHROPIC_API_KEY" else "OPENAI_API_KEY"),
         actionButton("ai_refresh_online_models", "Load Available Models"),
         selectInput("ai_online_model", "Available model", choices = choices),
@@ -655,6 +655,10 @@ register_ai_server <- function(input, output, session) {
   observeEvent(input$guide_apply, {
     choice <- input$guide_choice %||% "ollama"
     guide_endpoint(if (choice == "local_server") local_server_endpoint else "")
+    if (choice == "local_server") {
+      # Covers the case where this provider is already selected, so the settings UI does not re-render.
+      updateTextInput(session, "ai_endpoint", value = local_server_endpoint)
+    }
     updateSelectInput(session, "ai_provider", selected = guide_provider[[choice]])
     updateTabsetPanel(session, "main_tabs", selected = if (choice == "none") "Ask AI" else "AI Settings")
     removeModal()
