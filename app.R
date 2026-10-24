@@ -9,7 +9,14 @@ if (!requireNamespace("shiny", quietly = TRUE)) {
 
 library(shiny)
 
+# Set when started from a terminal with `Rscript app.R`.
+script_file <- sub("^--file=", "", grep("^--file=", commandArgs(FALSE), value = TRUE))
+run_by_rscript <- length(script_file) == 1 && basename(script_file) == "app.R"
+
 get_app_folder <- function() {
+  if (run_by_rscript) {
+    return(dirname(normalizePath(script_file)))
+  }
   if (!is.null(sys.frames()[[1]]$ofile)) {
     return(dirname(normalizePath(sys.frames()[[1]]$ofile)))
   }
@@ -38,4 +45,9 @@ server <- function(input, output, session) {
   register_reference_server(input, output, session)
 }
 
-shinyApp(ui, server)
+if (run_by_rscript) {
+  # Rscript is non-interactive, so Shiny would not open a browser on its own.
+  runApp(shinyApp(ui, server), launch.browser = TRUE)
+} else {
+  shinyApp(ui, server)
+}

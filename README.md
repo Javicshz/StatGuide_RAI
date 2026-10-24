@@ -118,10 +118,16 @@ There are three local entry points:
 - `run_console.R` opens the numbered RStudio Console menu with calculators, references, search, and Ask AI.
 - `run_ai.R` loads only the AI console helpers, including local CLI, Ollama, and API helper functions.
 
-For the GUI app, open `app.R` in RStudio/Posit and click **Run App**, or run:
+For the GUI app, open `app.R` in RStudio/Posit and click **Run App**, or run this in the R console:
 
 ```r
 shiny::runApp()
+```
+
+From a terminal, run this from any folder (it opens the app in your browser; press Ctrl+C to stop):
+
+```bash
+Rscript path/to/StatGuide_RAI/app.R
 ```
 
 ## RStudio Console Versions
