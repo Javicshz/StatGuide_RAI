@@ -44,6 +44,7 @@ source(file.path(app_dir, "R", "console_ai.R"), local = .GlobalEnv)
 
 source(file.path(app_dir, "R", "calculator_helpers.R"), local = environment())
 source(file.path(app_dir, "R", "content_data.R"), local = environment())
+source(file.path(app_dir, "R", "formula_tex.R"), local = environment())
 source(file.path(app_dir, "R", "formatting.R"), local = environment())
 source(file.path(app_dir, "R", "calculator_reference.R"), local = environment())
 source(file.path(app_dir, "R", "ui_tabs.R"), local = environment())

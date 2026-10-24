@@ -170,7 +170,7 @@ register_reference_server <- function(input, output, session) {
       tags$p(class = "formula-note", "These formulas are organized by general statistics topic."),
       concept_link,
       tags$h5("Formulas"),
-      render_formula_items(topic_formulas[[input$formula_topic]]),
+      render_formula_items(topic_formulas[[input$formula_topic]], topic_formulas_tex[[input$formula_topic]]),
       var_block,
       r_block
     )

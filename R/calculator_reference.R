@@ -84,10 +84,12 @@ render_concept_items <- function(items) {
   )
 }
 
-render_formula_items <- function(items) {
+render_formula_items <- function(items, tex = NULL) {
   tags$div(
     class = "reference-list-clean formula-list-clean",
-    lapply(items, function(item) {
+    lapply(seq_along(items), function(i) {
+      item <- items[[i]]
+      item_tex <- if (length(tex) >= i) tex[[i]] else ""
       parsed <- split_labeled_item(
         item,
         if (looks_like_formula_text(item)) "Formula" else "Note",
@@ -99,10 +101,20 @@ render_formula_items <- function(items) {
       } else {
         "reference-body formula-body formula-note-inline"
       }
+      body <- if (nzchar(item_tex)) {
+        # Typeset formula for working on paper; plain text kept for typing into R.
+        tags$div(
+          class = "reference-body formula-body",
+          tags$div(class = "formula-math", `data-tex` = item_tex, parsed$body),
+          tags$div(class = "formula-plain", parsed$body)
+        )
+      } else {
+        tags$div(class = body_class, parsed$body)
+      }
       tags$div(
         class = "reference-row formula-row",
         tags$div(class = "reference-label formula-label-inline", parsed$label),
-        tags$div(class = body_class, parsed$body)
+        body
       )
     })
   )

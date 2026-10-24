@@ -164,8 +164,33 @@ examples_tab <- tabPanel(
   )
 )
 
+# KaTeX (bundled in www/katex, works offline) typesets formulas that carry LaTeX.
+katex_dependency <- htmltools::htmlDependency(
+  "katex", "0.16.11",
+  # Shiny auto-sources R/ before app.R defines app_dir; runApp() then runs in the app folder.
+  src = file.path(if (exists("app_dir")) app_dir else getwd(), "www", "katex"),
+  script = "katex.min.js",
+  stylesheet = "katex.min.css"
+)
+
+katex_render_script <- tags$script(HTML("
+  function statguideRenderMath() {
+    if (!window.katex) return;
+    document.querySelectorAll('.formula-math:not([data-rendered])').forEach(function (el) {
+      el.setAttribute('data-rendered', '1');
+      katex.render(el.getAttribute('data-tex'), el, { displayMode: true, throwOnError: false });
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    statguideRenderMath();
+    new MutationObserver(statguideRenderMath).observe(document.body, { childList: true, subtree: true });
+  });
+"))
+
 ui <- fluidPage(
   tags$head(
+    katex_dependency,
+    katex_render_script,
     tags$style(HTML("
       :root {
         --charcoal-blue: #2f4858;
@@ -324,6 +349,10 @@ ui <- fluidPage(
       .markdown-numbered { margin: 4px 0; }
       pre.shiny-text-output { color: var(--midnight-text); white-space: pre-wrap; max-height: 650px; overflow-y: auto; background: var(--midnight-panel); border-color: var(--midnight-border); border-radius: 8px; box-shadow: var(--shadow-soft); }
       textarea { min-height: 90px; }
+      .formula-math { font-size: 1.15em; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+      .formula-math .katex-display { margin: 4px 0; }
+      .formula-math .katex-display > .katex { text-align: left; }
+      .formula-plain { font-size: 0.85em; opacity: 0.75; font-family: monospace; }
     "))
   ),
   titlePanel("StatGuide R AI"),

@@ -426,4 +426,10 @@ expect_error("pasted table preserves inconsistent row error", env$parse_continge
 expect_error("pasted table preserves no counts error", env$parse_contingency_table_text("Yes No"), "does not contain any numeric counts")
 expect_error("pasted table preserves totals only error", env$parse_contingency_table_text("Total 1 2 3"), "No observed-count rows were found")
 
+check("every formula topic has LaTeX", setequal(names(env$topic_formulas), names(env$topic_formulas_tex)))
+check("LaTeX formulas line up with plain-text formulas",
+      identical(lengths(env$topic_formulas), lengths(env$topic_formulas_tex[names(env$topic_formulas)])))
+formula_html <- as.character(env$render_formula_items("Mean: xbar = sum(x) / n", "\\bar{x}"))
+check("formula with LaTeX gets a typeset block", grepl("formula-math", formula_html, fixed = TRUE))
+
 cat("Calculator reliability checks passed\n")
