@@ -181,4 +181,42 @@ missing_input <- send_ai_request(
 )
 check("missing input is rejected", identical(missing_input$status, "missing_input"))
 
+check("localhost endpoint is local", ai_is_local_endpoint("http://localhost:1234/v1"))
+check("127.0.0.1 endpoint is local", ai_is_local_endpoint("http://127.0.0.1:8080/v1"))
+check("remote endpoint is not local", !ai_is_local_endpoint("https://localhost.example.com/v1"))
+local_openai <- send_ai_request("p", "debug_r", "q", "", ai_provider_settings("generic_openai", "m", "http://127.0.0.1:9/v1", "STATGUIDE_TEST_NO_KEY", "", FALSE))
+check("local OpenAI-compatible server skips send approval and API key", identical(local_openai$status, "online_provider_unreachable"))
+
+if (.Platform$OS.type == "unix") {
+  fake_cli <- tempfile("fake-cli-")
+  writeLines(c("#!/bin/sh", "for a in \"$@\"; do echo \"ARG[$a]\"; done", "cat"), fake_cli)
+  Sys.chmod(fake_cli, "755")
+  marker <- tempfile("injected-")
+  cli <- ai_claude_code_generate(paste0("hi; touch ", marker, " \"q\" $HOME"), list(local_app = fake_cli, model = "x y"))
+  check("CLI run succeeds with shell metacharacters", isTRUE(cli$ok))
+  check("CLI prompt is not executed by the shell", !file.exists(marker))
+  check("CLI prompt arrives on stdin unchanged", grepl(paste0("hi; touch ", marker, " \"q\" $HOME"), cli$message, fixed = TRUE))
+  check("CLI args stay intact", grepl("ARG[x y]", cli$message, fixed = TRUE))
+}
+
+check("user-info trick is not local", !ai_is_local_endpoint("https://localhost:123@attacker.example/v1"))
+check("IPv6 loopback with port is local", ai_is_local_endpoint("http://[::1]:8080/v1"))
+check("non-URL is not local", !ai_is_local_endpoint("localhost:1234"))
+remote_ollama <- send_ai_request("p", "concept", "q", "", ai_provider_settings("ollama", "m", "http://remote.example:11434", "", "", FALSE))
+check("remote Ollama needs send approval", identical(remote_ollama$status, "blocked_external_send"))
+
+if (.Platform$OS.type == "unix") {
+  failing_cli <- tempfile("failing-cli-")
+  writeLines(c("#!/bin/sh", "exit 1"), failing_cli)
+  Sys.chmod(failing_cli, "755")
+  check("CLI check reports a failing command", identical(ai_cli_check(failing_cli, "Test CLI")$status, "cli_check_failed"))
+  tilde_dir <- file.path(path.expand("~"), paste0(".statguide-test-", Sys.getpid()))
+  dir.create(tilde_dir)
+  writeLines(c("#!/bin/sh", "echo ran"), file.path(tilde_dir, "cli"))
+  Sys.chmod(file.path(tilde_dir, "cli"), "755")
+  tilde_result <- ai_cli_run(file.path("~", basename(tilde_dir), "cli"), "x")
+  unlink(tilde_dir, recursive = TRUE)
+  check("CLI path starting with ~ runs", isTRUE(tilde_result$ok))
+}
+
 cat("AI provider checks passed\n")

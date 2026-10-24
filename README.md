@@ -24,15 +24,15 @@ Here are a few screenshots showing what the app currently looks like.
 
 ### Ask AI
 
-The Ask AI tab helps prepare better prompts for statistics, R code, debugging, interpretation, and workflow planning. It can still be used in manual prompt-only mode if no AI provider is connected.
+The Ask AI tab helps prepare better prompts for statistics, R code, debugging, interpretation, and workflow planning. It can still be used in manual prompt-only mode if no AI provider is connected. The **New to AI? Set up a model step by step** button opens a plain-language guide for connecting Ollama, Codex, Claude Code, LM Studio, or an API key.
 
-![Ask AI dark theme example](screenshots/ask-ai-dark.png)
+![Ask AI tab with the step-by-step AI setup button](screenshots/ask-ai-setup-guide-dark.png)
 
 ### Calculator Example
 
-The calculators are meant to help work through common stats problems with inputs, output, quick reference notes, and R code guidance.
+The calculators are meant to help work through common stats problems with inputs, output, quick reference notes, and R code guidance. This example uses the normal approximation to the binomial with a continuity correction.
 
-![Calculator dark theme example](screenshots/calculator-dark.png)
+![Normal approximation to binomial calculator with output and quick reference](screenshots/calculator-normal-approx-dark.png)
 
 ### Concepts And Definitions
 
@@ -42,15 +42,15 @@ The guide sections give quick explanations and reminders for statistics topics, 
 
 ### Formula Reference
 
-The formulas tab keeps important formulas and simple R code templates in one place.
+The formulas tab keeps important formulas and simple R code templates in one place. Formulas are typeset like a textbook (rendered offline with KaTeX) for working problems on paper, with the plain-text version underneath for typing into R.
 
-![Formula reference dark theme example](screenshots/formulas-dark.png)
+![One-proportion z test formula typeset in the Formulas tab](screenshots/formulas-latex-dark.png)
 
 ### Search Helper
 
 The search helper lets you type problem wording and jump toward the calculator or reference topic that is most likely to fit.
 
-![Search helper dark theme example](screenshots/search-helper-dark.png)
+![Search helper suggesting problem types for a probability question](screenshots/search-helper-suggestions-dark.png)
 
 ### Optional AI Helper
 
@@ -100,13 +100,46 @@ This project is still in active development. The app runs locally, the calculato
 
 - R
 - Shiny
-- Optional: Ollama, Codex CLI, Claude Code CLI, or API credentials configured through environment variables.
+- For AI providers: the `curl` and `jsonlite` packages.
+- Optional: `mirai`, so the app stays responsive while waiting for an AI answer.
+- Optional: Ollama, Codex CLI, Claude Code CLI, a local OpenAI-compatible server (LM Studio, llama.cpp, vLLM), or API credentials configured through environment variables.
 
-Install Shiny if needed:
+Install the packages if needed:
 
 ```r
-install.packages("shiny")
+install.packages(c("shiny", "curl", "jsonlite", "mirai"))
 ```
+
+## Quick Start (No Coding Needed)
+
+1. Install R from [cran.r-project.org](https://cran.r-project.org) if you do not have it yet.
+2. Download this project: on GitHub click **Code**, then **Download ZIP**, and unzip it.
+3. Open the project folder and double-click the launcher:
+   - Mac: **Start StatGuide.command**
+   - Windows: **Start StatGuide.bat**
+4. The app opens in your web browser. The first start takes a minute while it installs the R packages it needs.
+5. Keep the small terminal window open while you use the app. Close it to stop the app.
+
+If your Mac says the file "cannot be opened because it is from an unidentified developer", right-click the file, choose **Open**, then click **Open** again. You only need to do this once.
+
+To connect an AI model, click **New to AI? Set up a model step by step** in the Ask AI tab. It walks you through each option in plain language and checks that it works.
+
+### Running From A Terminal
+
+R files run with R, not Python, and typing a file name alone does not run it. From the project folder:
+
+```bash
+Rscript app.R
+```
+
+`run_ai.R` and `run_console.R` are for an interactive R session, because they load helpers that you then type commands into. Start R by typing `R` in the terminal (or open RStudio), then:
+
+```r
+source("run_ai.R")       # AI helpers such as codex("...") and ollama("...")
+source("run_console.R")  # numbered menu
+```
+
+Type `q()` to leave R.
 
 ## Run The App
 
@@ -116,10 +149,16 @@ There are three local entry points:
 - `run_console.R` opens the numbered RStudio Console menu with calculators, references, search, and Ask AI.
 - `run_ai.R` loads only the AI console helpers, including local CLI, Ollama, and API helper functions.
 
-For the GUI app, open `app.R` in RStudio/Posit and click **Run App**, or run:
+For the GUI app, open `app.R` in RStudio/Posit and click **Run App**, or run this in the R console:
 
 ```r
 shiny::runApp()
+```
+
+From a terminal, run this from any folder (it opens the app in your browser; press Ctrl+C to stop):
+
+```bash
+Rscript path/to/StatGuide_RAI/app.R
 ```
 
 ## RStudio Console Versions
@@ -145,7 +184,7 @@ codex("Provide the R code for a Poisson probability problem with lambda 2 and x 
 ollama("Explain Poisson lambda in R.")
 ```
 
-If a console helper needs setup, it will prompt you through the missing pieces. For example, `ollama()` can list installed local Ollama models when Ollama is running, and API helpers ask for model names, endpoints, environment variable names, and explicit send confirmation. The AI app must be open in the background for it to work.
+If a console helper needs setup, it will prompt you through the missing pieces. For example, `ollama()` can list installed local Ollama models when Ollama is running, and API helpers ask for model names, endpoints, environment variable names, and explicit send confirmation. The console helpers work on their own; the Shiny app does not need to be running.
 
 Available console AI helpers include:
 
@@ -175,6 +214,8 @@ openai_compatible(
 The console menu also has an Ask AI option with provider choices. Online providers require a typed confirmation before sending.
 
 ## AI Provider Setup
+
+Local OpenAI-compatible servers work through the "Generic OpenAI-compatible endpoint" provider. Use a `localhost` or `127.0.0.1` endpoint such as `http://localhost:1234/v1`; no API key or send approval is needed for those.
 
 See [AI-PROVIDER-SETUP.md](AI-PROVIDER-SETUP.md) for local CLI, Ollama, OpenAI-compatible API, and Anthropic/Claude setup notes.
 

@@ -5,6 +5,8 @@ register_ai_server <- function(input, output, session) {
   ollama_status <- reactiveVal("Click Refresh Ollama Models or Review Settings to load installed local models.")
   online_models <- reactiveVal(character(0))
   online_model_status <- reactiveVal("Click Load Available Models or Review Settings to load account/provider models.")
+  # Endpoint the setup guide pre-fills when it switches to a local server.
+  guide_endpoint <- reactiveVal("")
 
   selected_ai_model <- reactive({
     provider <- input$ai_provider %||% "none"
@@ -39,7 +41,8 @@ register_ai_server <- function(input, output, session) {
     provider <- input$ai_provider %||% "none"
 
     if (provider == "ollama") {
-      models <- ollama_models()
+      # isolate: re-rendering on refresh would reset the endpoint/model boxes.
+      models <- isolate(ollama_models())
       choices <- c("Type model manually" = "", stats::setNames(models, models))
       return(tagList(
         textInput("ai_ollama_endpoint", "Ollama endpoint", "http://localhost:11434"),
@@ -52,10 +55,10 @@ register_ai_server <- function(input, output, session) {
     }
 
     if (provider %in% c("openai", "anthropic", "generic_openai")) {
-      models <- online_models()
+      models <- isolate(online_models())
       choices <- c("Type model manually" = "", stats::setNames(models, models))
       return(tagList(
-        textInput("ai_endpoint", "Endpoint URL", "", placeholder = if (provider == "anthropic") "Default: https://api.anthropic.com/v1" else "Default: https://api.openai.com/v1"),
+        textInput("ai_endpoint", "Endpoint URL", if (provider == "generic_openai") isolate(guide_endpoint()) else "", placeholder = if (provider == "anthropic") "Default: https://api.anthropic.com/v1" else "Default: https://api.openai.com/v1"),
         textInput("ai_key_env", "API key environment variable", "", placeholder = if (provider == "anthropic") "ANTHROPIC_API_KEY" else "OPENAI_API_KEY"),
         actionButton("ai_refresh_online_models", "Load Available Models"),
         selectInput("ai_online_model", "Available model", choices = choices),
@@ -382,6 +385,52 @@ register_ai_server <- function(input, output, session) {
     ))
   })
 
+  # mirai (optional) runs the request in a background R process so the app stays
+  # responsive; without it the request runs in this session as before.
+  providers_file <- normalizePath(file.path(app_dir, "R", "ai_providers.R"))
+  ai_task <- ExtendedTask$new(function(prompt, task, question, context, settings) {
+    if (requireNamespace("mirai", quietly = TRUE)) {
+      mirai::mirai(
+        {
+          source(providers_file, local = TRUE)
+          send_ai_request(prompt, task, question, context, settings)
+        },
+        providers_file = providers_file,
+        prompt = prompt,
+        task = task,
+        question = question,
+        context = context,
+        settings = settings
+      )
+    } else {
+      send_ai_request(prompt, task, question, context, settings)
+    }
+  })
+  bslib::bind_task_button(ai_task, "ai_send")
+
+  observeEvent(input$ai_send, {
+    ai_task$invoke(
+      build_ai_prompt(
+        input$ai_task %||% "method",
+        input$ai_question %||% "",
+        input$ai_context %||% "",
+        input$ai_provider %||% "none",
+        isTRUE(input$ai_allow_external)
+      ),
+      input$ai_task %||% "method",
+      input$ai_question %||% "",
+      input$ai_context %||% "",
+      ai_provider_settings(
+        input$ai_provider %||% "none",
+        selected_ai_model(),
+        selected_ai_endpoint(),
+        input$ai_key_env %||% "",
+        input$ai_local_app %||% "",
+        isTRUE(input$ai_allow_external)
+      )
+    )
+  })
+
   output$ai_response <- renderUI({
     if (is.null(input$ai_send) || input$ai_send == 0) {
       return(tags$div(
@@ -391,36 +440,12 @@ register_ai_server <- function(input, output, session) {
       ))
     }
 
-    isolate({
-      prompt <- build_ai_prompt(
-        input$ai_task %||% "method",
-        input$ai_question %||% "",
-        input$ai_context %||% "",
-        input$ai_provider %||% "none",
-        isTRUE(input$ai_allow_external)
-      )
-
-      result <- send_ai_request(
-        prompt,
-        input$ai_task %||% "method",
-        input$ai_question %||% "",
-        input$ai_context %||% "",
-        ai_provider_settings(
-          input$ai_provider %||% "none",
-          selected_ai_model(),
-          selected_ai_endpoint(),
-          input$ai_key_env %||% "",
-          input$ai_local_app %||% "",
-          isTRUE(input$ai_allow_external)
-        )
-      )
-
-      tags$div(
-        class = "ai-response-wrapper",
-        tags$p(tags$strong("Status: "), result$status),
-        render_markdownish(result$message)
-      )
-    })
+    result <- ai_task$result()
+    tags$div(
+      class = "ai-response-wrapper",
+      tags$p(tags$strong("Status: "), result$status),
+      render_markdownish(result$message)
+    )
   })
 
   output$ai_local_guidance <- renderUI({
@@ -456,4 +481,186 @@ register_ai_server <- function(input, output, session) {
     )
   })
 
+  # Setup guide: a pop-up that walks non-programmers through connecting an AI.
+  # Inline tags without the line breaks htmltools adds, so punctuation sits right after them.
+  b <- function(...) tags$b(..., .noWS = "outside")
+  code <- function(...) tags$code(..., .noWS = "outside")
+  kbd <- function(...) tags$kbd(..., .noWS = "outside")
+  link <- function(href, text) tags$a(href = href, target = "_blank", text, .noWS = "outside")
+  open_terminal_step <- tags$li(
+    "Open a terminal. On a Mac press ", kbd("Cmd"), " + ", kbd("Space"),
+    ", type ", b("Terminal"), ", and press Enter. On Windows open the Start menu and search for ",
+    b("PowerShell"), "."
+  )
+  type_step <- function(command, after = NULL) {
+    tags$li("Type this and press Enter: ", code(command), after)
+  }
+
+  guide_steps <- function(choice) {
+    switch(choice,
+      ollama = tagList(
+        tags$p("Ollama runs a free AI model on your own computer. Your questions never leave your machine. You need about 8 GB of memory (RAM) and a few GB of disk space."),
+        tags$ol(
+          tags$li("Go to ", link("https://ollama.com/download", "ollama.com/download"), ", download Ollama, and install it like any other app. Open it once; it then runs quietly in the background."),
+          open_terminal_step,
+          type_step("ollama pull llama3.2", " This downloads a small model (about 2 GB). Wait until it says success."),
+          tags$li("Click ", b("Check my setup"), " below. When it says Ready, click ", b("Use this"), ".")
+        )
+      ),
+      codex_cli = tagList(
+        tags$p("Codex is OpenAI's coding assistant. It uses your ChatGPT plan (Plus, Pro, Business, or Edu), so there is no API key to manage. Your questions are sent to OpenAI."),
+        tags$ol(
+          tags$li("Install Node.js from ", link("https://nodejs.org", "nodejs.org"), " (click the LTS download) if you have not already."),
+          open_terminal_step,
+          type_step("npm install -g @openai/codex"),
+          type_step("codex login", " A browser window opens. Sign in with your ChatGPT account, then come back."),
+          tags$li("Click ", b("Check my setup"), " below. When it says Ready, click ", b("Use this"), ".")
+        )
+      ),
+      claude_code_cli = tagList(
+        tags$p("Claude Code is Anthropic's coding assistant. It uses your Claude plan (Pro or Max), so there is no API key to manage. Your questions are sent to Anthropic."),
+        tags$ol(
+          open_terminal_step,
+          tags$li("Install it. On a Mac type ", code("curl -fsSL https://claude.ai/install.sh | bash"),
+                  " and press Enter. On Windows (PowerShell) type ", code("irm https://claude.ai/install.ps1 | iex"), " and press Enter."),
+          type_step("claude", " Follow the sign-in steps in your browser. When you see the Claude prompt, type /exit and press Enter."),
+          tags$li("Close and reopen StatGuide so it can find the new command, then click ", b("Check my setup"), ". When it says Ready, click ", b("Use this"), ".")
+        )
+      ),
+      local_server = tagList(
+        tags$p("Use this if you run a model with LM Studio, llama.cpp, vLLM, or a similar app. Everything stays on your computer and no API key is needed."),
+        tags$ol(
+          tags$li("Easiest option: install ", link("https://lmstudio.ai", "LM Studio"), ", open it, and download a model from its search page."),
+          tags$li("In LM Studio open the ", b("Developer"), " tab and turn on ", b("Start server"), ". It listens at ", code("http://localhost:1234/v1"), "."),
+          tags$li("Click ", b("Check my setup"), " below. When it says Ready, click ", b("Use this"), ". Then pick your model in AI Settings with ", b("Load Available Models"), "."),
+          tags$li("Using a different app? Click ", b("Use this"), " anyway and type that app's address in the Endpoint URL box.")
+        )
+      ),
+      openai = tagList(
+        tags$p("An API key lets the app talk to OpenAI directly. API use is billed per question by OpenAI, separately from a ChatGPT plan. Treat the key like a password: never paste it into this app, a chat, or a file you share."),
+        tags$ol(
+          tags$li("Create a key at ", link("https://platform.openai.com/api-keys", "platform.openai.com/api-keys"), " and copy it."),
+          tags$li("In the RStudio Console (or any R window) type ", code('file.edit("~/.Renviron")'), " and press Enter. A file opens."),
+          tags$li("Add this line, with your key after the = sign, then save and close the file: ", code("OPENAI_API_KEY=your-key-here")),
+          tags$li("Close and reopen StatGuide so it reads the key. This file lives in your home folder, not in the project, so it is never uploaded to GitHub."),
+          tags$li("Click ", b("Check my setup"), ". When it says Ready, click ", b("Use this"), " and choose a model in AI Settings with ", b("Load Available Models"), ".")
+        )
+      ),
+      anthropic = tagList(
+        tags$p("An API key lets the app talk to Anthropic (Claude) directly. API use is billed per question by Anthropic, separately from a Claude plan. Treat the key like a password: never paste it into this app, a chat, or a file you share."),
+        tags$ol(
+          tags$li("Create a key at ", link("https://console.anthropic.com/settings/keys", "console.anthropic.com/settings/keys"), " and copy it."),
+          tags$li("In the RStudio Console (or any R window) type ", code('file.edit("~/.Renviron")'), " and press Enter. A file opens."),
+          tags$li("Add this line, with your key after the = sign, then save and close the file: ", code("ANTHROPIC_API_KEY=your-key-here")),
+          tags$li("Close and reopen StatGuide so it reads the key. This file lives in your home folder, not in the project, so it is never uploaded to GitHub."),
+          tags$li("Click ", b("Check my setup"), ". When it says Ready, click ", b("Use this"), " and choose a model in AI Settings with ", b("Load Available Models"), ".")
+        )
+      ),
+      tagList(
+        tags$p("No setup needed. The app writes a well-structured prompt that you can copy into any AI website, such as ChatGPT or Claude."),
+        tags$ol(
+          tags$li("Click ", b("Use this"), "."),
+          tags$li("In the Ask AI tab, type your question and click ", b("Prepare AI Prompt"), "."),
+          tags$li("Copy the prepared prompt into the AI website you use.")
+        )
+      )
+    )
+  }
+
+  guide_provider <- c(
+    ollama = "ollama", codex_cli = "codex_cli", claude_code_cli = "claude_code_cli",
+    local_server = "generic_openai", openai = "openai", anthropic = "anthropic", none = "none"
+  )
+  local_server_endpoint <- "http://localhost:1234/v1"
+
+  guide_check <- function(choice) {
+    key_missing <- function(key_env) {
+      list(ok = FALSE, message = paste0(
+        "No ", key_env, " was found. Follow steps 2 to 4, then close and reopen StatGuide before checking again."
+      ))
+    }
+    result <- switch(choice,
+      ollama = {
+        r <- ai_ollama_connection_summary("")
+        if (isTRUE(r$ok) && !length(r$models)) {
+          r <- list(ok = FALSE, message = "Ollama is running, but no model is installed yet. Do step 3, then check again.")
+        }
+        r
+      },
+      codex_cli = ai_codex_cli_connection_summary(list(local_app = "")),
+      claude_code_cli = ai_claude_code_connection_summary(list(local_app = "")),
+      local_server = ai_openai_connection_summary(ai_provider_settings("generic_openai", "", local_server_endpoint, "", "", FALSE)),
+      openai = if (nzchar(Sys.getenv("OPENAI_API_KEY"))) {
+        ai_openai_connection_summary(ai_provider_settings("openai", "", "", "OPENAI_API_KEY", "", TRUE))
+      } else {
+        key_missing("OPENAI_API_KEY")
+      },
+      anthropic = if (nzchar(Sys.getenv("ANTHROPIC_API_KEY"))) {
+        ai_anthropic_connection_summary(ai_provider_settings("anthropic", "", "", "ANTHROPIC_API_KEY", "", TRUE))
+      } else {
+        key_missing("ANTHROPIC_API_KEY")
+      },
+      list(ok = TRUE, message = "Nothing to connect.")
+    )
+    paste0(if (isTRUE(result$ok)) "Ready.\n\n" else "Not ready yet.\n\n", result$message)
+  }
+
+  guide_result <- reactiveVal("")
+
+  show_setup_guide <- function() {
+    guide_result("")
+    showModal(modalDialog(
+      title = "Connect an AI model",
+      size = "l",
+      easyClose = TRUE,
+      radioButtons(
+        "guide_choice",
+        "Which of these fits you?",
+        width = "100%",
+        choices = c(
+          "I want a free AI that runs on my own computer (Ollama)" = "ollama",
+          "I pay for ChatGPT and want to use Codex" = "codex_cli",
+          "I pay for Claude and want to use Claude Code" = "claude_code_cli",
+          "I already run LM Studio or another local model server" = "local_server",
+          "I have an OpenAI API key" = "openai",
+          "I have an Anthropic (Claude) API key" = "anthropic",
+          "No AI, just give me a prompt to copy" = "none"
+        )
+      ),
+      tags$hr(),
+      uiOutput("guide_steps"),
+      verbatimTextOutput("guide_result"),
+      footer = tagList(
+        actionButton("guide_check", "Check my setup"),
+        actionButton("guide_apply", "Use this"),
+        modalButton("Close")
+      )
+    ))
+  }
+
+  observeEvent(input$ai_setup_guide, show_setup_guide())
+  observeEvent(input$ai_setup_guide_ask, show_setup_guide())
+
+  output$guide_steps <- renderUI(guide_steps(input$guide_choice %||% "ollama"))
+  observeEvent(input$guide_choice, guide_result(""))
+  output$guide_result <- renderText({
+    if (nzchar(guide_result())) guide_result() else "Follow the steps above, then click Check my setup."
+  })
+
+  observeEvent(input$guide_check, {
+    guide_result("Checking...")
+    guide_result(guide_check(input$guide_choice %||% "ollama"))
+  })
+
+  observeEvent(input$guide_apply, {
+    choice <- input$guide_choice %||% "ollama"
+    guide_endpoint(if (choice == "local_server") local_server_endpoint else "")
+    if (choice == "local_server") {
+      # Covers the case where this provider is already selected, so the settings UI does not re-render.
+      updateTextInput(session, "ai_endpoint", value = local_server_endpoint)
+    }
+    updateSelectInput(session, "ai_provider", selected = guide_provider[[choice]])
+    updateTabsetPanel(session, "main_tabs", selected = if (choice == "none") "Ask AI" else "AI Settings")
+    removeModal()
+  })
 }

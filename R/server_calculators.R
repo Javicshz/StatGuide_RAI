@@ -1,6 +1,25 @@
 # Server wiring for calculator inputs, outputs, references, and generated R code.
 
 register_calculator_server <- function(input, output, session) {
+  gof_inputs <- function() {
+    pasted <- parse_gof_table_text(input$gof_pasted_table)
+    values <- if (!is.null(pasted)) pasted else list(
+      observed = parse_nums(input$observed),
+      categories = parse_labels(input$categories)
+    )
+    expected <- parse_nums(input$expected_probs)
+    values$expected_probs <- if (length(expected)) expected else NULL
+    values$pasted <- !is.null(pasted)
+    values
+  }
+
+  independence_table <- function() {
+    pasted <- parse_contingency_table_text(input$pasted_table)
+    if (!is.null(pasted)) pasted else {
+      matrix_from_text(input$matrix_vals, input$nrow, input$row_names, input$col_names)
+    }
+  }
+
   output$inputs <- renderUI({
     fn <- input$fn
     tagList(
@@ -448,7 +467,7 @@ register_calculator_server <- function(input, output, session) {
           paste0("frequency <- ", code_vector(frequencies)),
           "n <- sum(frequency)",
           "grouped_mean <- sum(midpoint * frequency) / n",
-          "grouped_variance <- sum(frequency * (midpoint - grouped_mean)^2) / (n - 1)",
+          paste0("grouped_variance <- sum(frequency * (midpoint - grouped_mean)^2) / ", if (input$sample) "(n - 1)" else "n"),
           "grouped_sd <- sqrt(grouped_variance)"
         ), collapse = "\n")
       },
@@ -622,8 +641,8 @@ register_calculator_server <- function(input, output, session) {
           equal = "dbinom(value, n, p)",
           less = "pbinom(value - 1, n, p)",
           less_equal = "pbinom(value, n, p)",
-          greater = "1 - pbinom(value, n, p)",
-          greater_equal = "1 - pbinom(value - 1, n, p)",
+          greater = "pbinom(value, n, p, lower.tail = FALSE)",
+          greater_equal = "pbinom(value - 1, n, p, lower.tail = FALSE)",
           between = "pbinom(upper_value, n, p) - pbinom(value - 1, n, p)"
         )
         paste(c(
@@ -639,8 +658,8 @@ register_calculator_server <- function(input, output, session) {
           equal = "dpois(value, lambda)",
           less = "ppois(value - 1, lambda)",
           less_equal = "ppois(value, lambda)",
-          greater = "1 - ppois(value, lambda)",
-          greater_equal = "1 - ppois(value - 1, lambda)",
+          greater = "ppois(value, lambda, lower.tail = FALSE)",
+          greater_equal = "ppois(value - 1, lambda, lower.tail = FALSE)",
           between = "ppois(upper_value, lambda) - ppois(value - 1, lambda)"
         )
         paste(c(
@@ -659,8 +678,8 @@ register_calculator_server <- function(input, output, session) {
           equal = "dhyper(value, success_items, failure_items, draws)",
           less = "phyper(value - 1, success_items, failure_items, draws)",
           less_equal = "phyper(value, success_items, failure_items, draws)",
-          greater = "1 - phyper(value, success_items, failure_items, draws)",
-          greater_equal = "1 - phyper(value - 1, success_items, failure_items, draws)",
+          greater = "phyper(value, success_items, failure_items, draws, lower.tail = FALSE)",
+          greater_equal = "phyper(value - 1, success_items, failure_items, draws, lower.tail = FALSE)",
           between = "phyper(upper_value, success_items, failure_items, draws) - phyper(value - 1, success_items, failure_items, draws)"
         )
         paste(c(
@@ -680,7 +699,12 @@ register_calculator_server <- function(input, output, session) {
         paste0("x <- ", input$x_value, "\nmu <- ", input$mean_val, "\nsigma <- ", input$sd_val, "\n(x - mu) / sigma")
       },
       normalProb = {
-        paste0("mu <- ", input$mean_val, "\nsigma <- ", input$sd_val, "\nlower <- ", code_num(input$lower, "-Inf"), "\nupper <- ", code_num(input$upper, "Inf"), "\npnorm(upper, mu, sigma) - pnorm(lower, mu, sigma)")
+        # Bounds may still be blank while the user is typing; show NA rather than an error.
+        bounds <- tryCatch(
+          probability_bounds(input$prob_type, input$lower, input$upper, input$exact_value),
+          error = function(e) list(lower = NA, upper = NA)
+        )
+        paste0("mu <- ", input$mean_val, "\nsigma <- ", input$sd_val, "\nlower <- ", format_num_for_code(bounds$lower), "\nupper <- ", format_num_for_code(bounds$upper), "\npnorm(upper, mu, sigma) - pnorm(lower, mu, sigma)")
       },
       invNormal = {
         paste0("area_left <- ", input$prob_left, "\nmu <- ", input$mean_val, "\nsigma <- ", input$sd_val, "\nqnorm(area_left, mu, sigma)")
@@ -707,13 +731,13 @@ register_calculator_server <- function(input, output, session) {
         paste0("n <- ", input$n, "\ns <- ", input$s, "\nalpha <- ", format_num_for_code(alpha), "\nvariance_ci <- (n - 1) * s^2 / qchisq(c(1 - alpha/2, alpha/2), df = n - 1)\nsqrt(variance_ci)")
       },
       meanKnownSigmaTest = {
-        paste0("n <- ", input$n, "\nxbar <- ", input$xbar, "\nmu0 <- ", input$mu0, "\nsigma <- ", input$sigma, "\nz <- (xbar - mu0) / (sigma / sqrt(n))\np_value <- ", if (input$alternative == "two.sided") "2 * pnorm(-abs(z))" else if (input$alternative == "less") "pnorm(z)" else "1 - pnorm(z)", "\np_value")
+        paste0("n <- ", input$n, "\nxbar <- ", input$xbar, "\nmu0 <- ", input$mu0, "\nsigma <- ", input$sigma, "\nz <- (xbar - mu0) / (sigma / sqrt(n))\np_value <- ", if (input$alternative == "two.sided") "2 * pnorm(-abs(z))" else if (input$alternative == "less") "pnorm(z)" else "pnorm(z, lower.tail = FALSE)", "\np_value")
       },
       meanTTest = {
-        paste0("n <- ", input$n, "\nxbar <- ", input$xbar, "\nmu0 <- ", input$mu0, "\ns <- ", input$s, "\nt <- (xbar - mu0) / (s / sqrt(n))\np_value <- ", if (input$alternative == "two.sided") "2 * pt(-abs(t), df = n - 1)" else if (input$alternative == "less") "pt(t, df = n - 1)" else "1 - pt(t, df = n - 1)", "\np_value")
+        paste0("n <- ", input$n, "\nxbar <- ", input$xbar, "\nmu0 <- ", input$mu0, "\ns <- ", input$s, "\nt <- (xbar - mu0) / (s / sqrt(n))\np_value <- ", if (input$alternative == "two.sided") "2 * pt(-abs(t), df = n - 1)" else if (input$alternative == "less") "pt(t, df = n - 1)" else "pt(t, df = n - 1, lower.tail = FALSE)", "\np_value")
       },
       onePropTest = {
-        paste0("x <- ", input$x_success, "\nn <- ", input$n, "\np0 <- ", input$p0, "\nphat <- x / n\nz <- (phat - p0) / sqrt(p0 * (1 - p0) / n)\np_value <- ", if (input$alternative == "two.sided") "2 * pnorm(-abs(z))" else if (input$alternative == "less") "pnorm(z)" else "1 - pnorm(z)", "\np_value")
+        paste0("x <- ", input$x_success, "\nn <- ", input$n, "\np0 <- ", input$p0, "\nphat <- x / n\nz <- (phat - p0) / sqrt(p0 * (1 - p0) / n)\np_value <- ", if (input$alternative == "two.sided") "2 * pnorm(-abs(z))" else if (input$alternative == "less") "pnorm(z)" else "pnorm(z, lower.tail = FALSE)", "\np_value")
       },
       twoIndSampleProp = {
         paste0("x <- c(", input$x1, ", ", input$x2, ")\nn <- c(", input$n1, ", ", input$n2, ")\nprop.test(x, n, alternative = ", alt_arg(input$alternative), ", correct = FALSE)")
@@ -740,18 +764,18 @@ register_calculator_server <- function(input, output, session) {
         paste0("n1 <- ", input$n1, "\nvar1 <- ", input$var1, "\nn2 <- ", input$n2, "\nvar2 <- ", input$var2, "\nf_stat <- var1 / var2\nf_stat")
       },
       chiSqGoodnessFit = {
-        observed <- parse_data_numbers(input$observed)
+        values <- gof_inputs()
         paste(c(
-          paste0("observed <- ", code_vector(observed)),
-          "# Leave p blank for equal probabilities, or set p <- c(...).",
-          "chisq.test(observed)"
+          paste0("observed <- ", code_vector(values$observed)),
+          paste0("p <- ", if (is.null(values$expected_probs)) "rep(1 / length(observed), length(observed))" else code_vector(values$expected_probs)),
+          "chisq.test(observed, p = p)"
         ), collapse = "\n")
       },
       chiSqIndependence = {
-        observed <- parse_data_numbers(input$matrix_vals)
+        observed <- independence_table()
         paste(c(
-          paste0("observed <- matrix(", code_vector(observed), ", nrow = ", input$nrow, ", byrow = TRUE)"),
-          "chisq.test(observed)"
+          paste0("observed <- ", paste(deparse(observed), collapse = "\n")),
+          "chisq.test(observed, correct = FALSE)"
         ), collapse = "\n")
       },
       "Press Run to show a simple copyable R calculation for this calculator."
@@ -804,7 +828,7 @@ register_calculator_server <- function(input, output, session) {
           )
           else if (fn == "frequencyPercent") frequencyPercent(parse_nums(input$frequencies), parse_labels(input$categories))
           else if (fn == "selectedPercent") {
-            pasted_freq <- tryCatch(parse_gof_table_text(input$frequency_pasted_table), error = function(e) NULL)
+            pasted_freq <- parse_gof_table_text(input$frequency_pasted_table)
             if (!is.null(pasted_freq)) {
               selectedPercentCalc(pasted_freq$observed, pasted_freq$categories, as.integer(parse_nums(input$selected_positions)))
             } else {
@@ -954,31 +978,25 @@ register_calculator_server <- function(input, output, session) {
             twoVarianceRatioCalc(input$n1, input$var1, input$n2, input$var2, conf_level = levels$conf_level, alpha = levels$alpha, alternative = input$alternative)
           }
           else if (fn == "chiSqGoodnessFit") {
-            pasted_gof <- parse_gof_table_text(input$gof_pasted_table)
-            if (!is.null(pasted_gof)) {
+            values <- gof_inputs()
+            if (values$pasted) {
               cat("Parsed pasted table:\n")
-              print(data.frame(Category = pasted_gof$categories, Observed = pasted_gof$observed))
+              print(data.frame(Category = values$categories, Observed = values$observed))
               cat("--------------------------------------------------\n")
-              chiSqGoodnessFit(
-                pasted_gof$observed,
-                expected_probs = pasted_gof$expected_probs,
-                alpha = alpha_value(input$alpha),
-                categories = pasted_gof$categories,
-                claim = input$claim
-              )
-            } else {
-              expected <- if (nzchar(trimws(input$expected_probs))) parse_nums(input$expected_probs) else NULL
-              chiSqGoodnessFit(parse_nums(input$observed), expected_probs = expected, alpha = alpha_value(input$alpha), categories = parse_labels(input$categories), claim = input$claim)
             }
+            chiSqGoodnessFit(
+              values$observed,
+              expected_probs = values$expected_probs,
+              alpha = alpha_value(input$alpha),
+              categories = values$categories,
+              claim = input$claim
+            )
           } else if (fn == "chiSqIndependence") {
-            pasted_table <- parse_contingency_table_text(input$pasted_table)
-            observed_table <- if (!is.null(pasted_table)) {
+            observed_table <- independence_table()
+            if (nzchar(trimws(input$pasted_table))) {
               cat("Parsed pasted table:\n")
-              print(pasted_table)
+              print(observed_table)
               cat("--------------------------------------------------\n")
-              pasted_table
-            } else {
-              matrix_from_text(input$matrix_vals, input$nrow, input$row_names, input$col_names)
             }
             chiSqIndependence(observed_table, alpha = alpha_value(input$alpha))
           } else if (fn == "chiSqHomogeneity") {

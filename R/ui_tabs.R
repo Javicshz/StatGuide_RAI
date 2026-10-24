@@ -4,6 +4,8 @@ ask_ai_tab <- tabPanel(
   "Ask AI",
   sidebarLayout(
     sidebarPanel(
+      actionButton("ai_setup_guide_ask", "New to AI? Set up a model step by step", class = "btn-block"),
+      tags$br(),
       selectInput("ai_task", "What do you want AI to help with?", choices = ai_task_choices),
       textAreaInput(
         "ai_question",
@@ -21,7 +23,7 @@ ask_ai_tab <- tabPanel(
       ),
       checkboxInput("ai_allow_external", "I have reviewed this prompt and it is okay to send to the selected provider later", FALSE),
       actionButton("ai_prepare", "Prepare AI Prompt"),
-      actionButton("ai_send", "Ask AI")
+      bslib::input_task_button("ai_send", "Ask AI", label_busy = "Waiting for AI...")
     ),
     mainPanel(
       tags$h4("AI Workflow"),
@@ -64,6 +66,8 @@ ai_settings_tab <- tabPanel(
   "AI Settings",
   sidebarLayout(
     sidebarPanel(
+      actionButton("ai_setup_guide", "Help me connect an AI (step by step)", class = "btn-block"),
+      tags$br(),
       selectInput("ai_provider", "AI provider", choices = ai_provider_choices),
       uiOutput("ai_provider_settings_ui"),
       checkboxInput("ai_store_no_secrets", "Do not store raw API keys in this app", TRUE),
@@ -160,8 +164,33 @@ examples_tab <- tabPanel(
   )
 )
 
+# KaTeX (bundled in www/katex, works offline) typesets formulas that carry LaTeX.
+katex_dependency <- htmltools::htmlDependency(
+  "katex", "0.16.11",
+  # Shiny auto-sources R/ before app.R defines app_dir; runApp() then runs in the app folder.
+  src = file.path(if (exists("app_dir")) app_dir else getwd(), "www", "katex"),
+  script = "katex.min.js",
+  stylesheet = "katex.min.css"
+)
+
+katex_render_script <- tags$script(HTML("
+  function statguideRenderMath() {
+    if (!window.katex) return;
+    document.querySelectorAll('.formula-math:not([data-rendered])').forEach(function (el) {
+      el.setAttribute('data-rendered', '1');
+      katex.render(el.getAttribute('data-tex'), el, { displayMode: true, throwOnError: false });
+    });
+  }
+  document.addEventListener('DOMContentLoaded', function () {
+    statguideRenderMath();
+    new MutationObserver(statguideRenderMath).observe(document.body, { childList: true, subtree: true });
+  });
+"))
+
 ui <- fluidPage(
   tags$head(
+    katex_dependency,
+    katex_render_script,
     tags$style(HTML("
       :root {
         --charcoal-blue: #2f4858;
@@ -320,6 +349,15 @@ ui <- fluidPage(
       .markdown-numbered { margin: 4px 0; }
       pre.shiny-text-output { color: var(--midnight-text); white-space: pre-wrap; max-height: 650px; overflow-y: auto; background: var(--midnight-panel); border-color: var(--midnight-border); border-radius: 8px; box-shadow: var(--shadow-soft); }
       textarea { min-height: 90px; }
+      .modal-content { background: var(--midnight-panel); color: var(--midnight-text); border: 1px solid var(--midnight-border); }
+      .modal-header, .modal-footer { border-color: var(--midnight-border); }
+      .modal-header .close { color: var(--midnight-text); opacity: 0.8; text-shadow: none; }
+      .modal-content a { color: var(--sky-reflection); text-decoration: underline; }
+      .modal-content code, .modal-content kbd { background: var(--midnight-panel-soft); color: var(--midnight-text); }
+      .formula-math { font-size: 1.15em; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
+      .formula-math .katex-display { margin: 4px 0; }
+      .formula-math .katex-display > .katex { text-align: left; }
+      .formula-plain { font-size: 0.85em; opacity: 0.75; font-family: monospace; }
     "))
   ),
   titlePanel("StatGuide R AI"),

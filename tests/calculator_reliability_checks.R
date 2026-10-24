@@ -168,67 +168,67 @@ two_var_p <- min(2 * min(pf(f_stat, 11, 9), 1 - pf(f_stat, 11, 9)), 1)
 check("two variance structured statistic", isTRUE(all.equal(two_var_result$values$statistic, f_stat)))
 check("two variance structured p value", isTRUE(all.equal(two_var_result$values$p_value, two_var_p)))
 
-one_prop_result <- env$capture_calculator_result(env$onePropCI(40, 100, 0.95))
+one_prop_result <- env$capture_calculator_result(onePropCI(40, 100, 0.95))
 one_prop_phat <- 0.4
 one_prop_me <- qnorm(0.975) * sqrt(one_prop_phat * (1 - one_prop_phat) / 100)
 check("one proportion CI structured lower", isTRUE(all.equal(one_prop_result$values$lower_endpoint, one_prop_phat - one_prop_me)))
 check("one proportion CI preserves legacy text", grepl("One Proportion Confidence Interval", one_prop_result$output, fixed = TRUE))
 
-mean_known_result <- env$capture_calculator_result(env$meanKnownSigmaCI(25, 10, 2, 0.95))
+mean_known_result <- env$capture_calculator_result(meanKnownSigmaCI(25, 10, 2, 0.95))
 mean_known_me <- qnorm(0.975) * 2 / sqrt(25)
 check("mean known sigma CI structured lower", isTRUE(all.equal(mean_known_result$values$lower_endpoint, 10 - mean_known_me)))
 check("mean known sigma CI structured upper", isTRUE(all.equal(mean_known_result$values$upper_endpoint, 10 + mean_known_me)))
 
-mean_t_result <- env$capture_calculator_result(env$meanTCI(16, 20, 4, 0.95))
+mean_t_result <- env$capture_calculator_result(meanTCI(16, 20, 4, 0.95))
 mean_t_me <- qt(0.975, 15) * 4 / sqrt(16)
 check("mean t CI structured lower", isTRUE(all.equal(mean_t_result$values$lower_endpoint, 20 - mean_t_me)))
 check("mean t CI structured df", identical(mean_t_result$values$df, 15))
 
-variance_ci_result <- env$capture_calculator_result(env$varianceCI(12, 3, 0.95))
+variance_ci_result <- env$capture_calculator_result(varianceCI(12, 3, 0.95))
 variance_lower <- 11 * 3^2 / qchisq(0.975, 11)
 variance_upper <- 11 * 3^2 / qchisq(0.025, 11)
 check("variance CI structured lower", isTRUE(all.equal(variance_ci_result$values$variance_lower, variance_lower)))
 check("variance CI structured sd upper", isTRUE(all.equal(variance_ci_result$values$sd_upper, sqrt(variance_upper))))
-expect_error("one proportion CI rejects successes over n", env$onePropCI(12, 10, 0.95), "Successes x cannot be larger than n")
-expect_error("mean t CI rejects n under two", env$meanTCI(1, 10, 2, 0.95), "n must be a whole number at least 2")
+expect_error("one proportion CI rejects successes over n", onePropCI(12, 10, 0.95), "Successes x cannot be larger than n")
+expect_error("mean t CI rejects n under two", meanTCI(1, 10, 2, 0.95), "n must be a whole number at least 2")
 
-mean_z_test_result <- env$capture_calculator_result(env$meanKnownSigmaTest(25, 104, 100, 10, 0.05, "greater"))
+mean_z_test_result <- env$capture_calculator_result(meanKnownSigmaTest(25, 104, 100, 10, 0.05, "greater"))
 mean_z_stat <- (104 - 100) / (10 / sqrt(25))
 mean_z_p <- 1 - pnorm(mean_z_stat)
 check("mean known sigma test structured statistic", isTRUE(all.equal(mean_z_test_result$values$statistic, mean_z_stat)))
 check("mean known sigma test structured p value", isTRUE(all.equal(mean_z_test_result$values$p_value, mean_z_p)))
 check("mean known sigma test preserves legacy text", grepl("One Mean z Test", mean_z_test_result$output, fixed = TRUE))
 
-mean_t_test_result <- env$capture_calculator_result(env$meanTTest(16, 20, 18, 4, 0.05, "two.sided"))
+mean_t_test_result <- env$capture_calculator_result(meanTTest(16, 20, 18, 4, 0.05, "two.sided"))
 mean_t_stat <- (20 - 18) / (4 / sqrt(16))
 mean_t_p <- 2 * pt(-abs(mean_t_stat), 15)
 check("mean t test structured statistic", isTRUE(all.equal(mean_t_test_result$values$statistic, mean_t_stat)))
 check("mean t test structured p value", isTRUE(all.equal(mean_t_test_result$values$p_value, mean_t_p)))
 check("mean t test structured df", identical(mean_t_test_result$values$df, 15))
 
-one_prop_test_result <- env$capture_calculator_result(env$onePropTest(55, 100, 0.5, 0.05, "greater"))
+one_prop_test_result <- env$capture_calculator_result(onePropTest(55, 100, 0.5, 0.05, "greater"))
 one_prop_test_stat <- (0.55 - 0.5) / sqrt(0.5 * 0.5 / 100)
 one_prop_test_p <- 1 - pnorm(one_prop_test_stat)
 check("one proportion test structured statistic", isTRUE(all.equal(one_prop_test_result$values$statistic, one_prop_test_stat)))
 check("one proportion test structured p value", isTRUE(all.equal(one_prop_test_result$values$p_value, one_prop_test_p)))
-expect_error("mean known sigma test rejects bad alpha", env$meanKnownSigmaTest(25, 104, 100, 10, 1, "greater"), "Alpha must be greater than 0 and less than 1")
-expect_error("mean t test rejects n under two", env$meanTTest(1, 20, 18, 4, 0.05, "two.sided"), "n must be a whole number at least 2")
-expect_error("one proportion test rejects p0 boundary", env$onePropTest(5, 10, 1, 0.05, "greater"), "Hypothesized proportion must be greater than 0 and less than 1")
+expect_error("mean known sigma test rejects bad alpha", meanKnownSigmaTest(25, 104, 100, 10, 1, "greater"), "Alpha must be greater than 0 and less than 1")
+expect_error("mean t test rejects n under two", meanTTest(1, 20, 18, 4, 0.05, "two.sided"), "n must be a whole number at least 2")
+expect_error("one proportion test rejects p0 boundary", onePropTest(5, 10, 1, 0.05, "greater"), "Hypothesized proportion must be greater than 0 and less than 1")
 
 two_mean_known_result <- env$capture_calculator_result(
-  env$twoIndMeansKnownSigma(40, 52, 8, 35, 48, 7, conf_level = 0.95, alternative = "greater")
+  twoIndMeansKnownSigma(40, 52, 8, 35, 48, 7, conf_level = 0.95, alternative = "greater")
 )
 two_mean_diff <- 52 - 48
 two_mean_se <- sqrt(8^2 / 40 + 7^2 / 35)
 two_mean_stat <- two_mean_diff / two_mean_se
-two_mean_p <- 1 - pnorm(round(two_mean_stat, 2))
+two_mean_p <- 1 - pnorm(two_mean_stat)
 check("two mean known sigma structured difference", identical(two_mean_known_result$values$difference, two_mean_diff))
 check("two mean known sigma structured statistic", isTRUE(all.equal(two_mean_known_result$values$statistic, two_mean_stat)))
 check("two mean known sigma structured p value", isTRUE(all.equal(two_mean_known_result$values$p_value, two_mean_p)))
 check("two mean known sigma preserves legacy text", grepl("Two Independent Means", two_mean_known_result$output, fixed = TRUE))
 
 two_prop_result <- env$capture_calculator_result(
-  env$twoIndSampleProp(x1 = 45, n1 = 100, x2 = 30, n2 = 90, conf_level = 0.95, alternative = "greater")
+  twoIndSampleProp(x1 = 45, n1 = 100, x2 = 30, n2 = 90, conf_level = 0.95, alternative = "greater")
 )
 p1 <- 45 / 100
 p2 <- 30 / 90
@@ -239,11 +239,11 @@ z_stat <- diff_p / se_test
 check("two proportion structured difference", isTRUE(all.equal(two_prop_result$values$difference, diff_p)))
 check("two proportion structured pooled", isTRUE(all.equal(two_prop_result$values$pooled_proportion, pooled)))
 check("two proportion structured p value", isTRUE(all.equal(two_prop_result$values$p_value, 1 - pnorm(z_stat))))
-expect_error("two mean known sigma rejects bad sigma", env$twoIndMeansKnownSigma(40, 52, 0, 35, 48, 7), "sigma1 must be greater than 0")
-expect_error("two proportion rejects successes over n", env$twoIndSampleProp(x1 = 12, n1 = 10, x2 = 3, n2 = 10), "Successes x1 cannot be larger than n1")
+expect_error("two mean known sigma rejects bad sigma", twoIndMeansKnownSigma(40, 52, 0, 35, 48, 7), "sigma1 must be greater than 0")
+expect_error("two proportion rejects successes over n", twoIndSampleProp(x1 = 12, n1 = 10, x2 = 3, n2 = 10), "Successes x1 cannot be larger than n1")
 
 uneq_result <- env$capture_calculator_result(
-  env$twoIndMeanUneqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "two.sided")
+  twoIndMeanUneqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "two.sided")
 )
 uneq_diff <- 20 - 17
 uneq_se <- sqrt(4^2 / 12 + 5^2 / 15)
@@ -255,7 +255,7 @@ check("unequal variance two mean structured p value", isTRUE(all.equal(uneq_resu
 check("unequal variance preserves legacy text", grepl("Unequal Variances", uneq_result$output, fixed = TRUE))
 
 eq_result <- env$capture_calculator_result(
-  env$twoIndMeansEqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "greater")
+  twoIndMeansEqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "greater")
 )
 pooled_var <- (11 * 4^2 + 14 * 5^2) / (12 + 15 - 2)
 eq_se <- sqrt(pooled_var * (1 / 12 + 1 / 15))
@@ -263,11 +263,11 @@ eq_stat <- (20 - 17) / eq_se
 eq_p <- 1 - pt(eq_stat, 25)
 check("equal variance two mean structured pooled variance", isTRUE(all.equal(eq_result$values$pooled_variance, pooled_var)))
 check("equal variance two mean structured p value", isTRUE(all.equal(eq_result$values$p_value, eq_p)))
-expect_error("unequal variance rejects n under two", env$twoIndMeanUneqVar(1, 20, 4, 15, 17, 5), "n1 must be a whole number at least 2")
-expect_error("equal variance rejects bad sd", env$twoIndMeansEqVar(12, 20, 0, 15, 17, 5), "s1 must be greater than 0")
+expect_error("unequal variance rejects n under two", twoIndMeanUneqVar(1, 20, 4, 15, 17, 5), "n1 must be a whole number at least 2")
+expect_error("equal variance rejects bad sd", twoIndMeansEqVar(12, 20, 0, 15, 17, 5), "s1 must be greater than 0")
 
 gof_result <- env$capture_calculator_result(
-  env$chiSqGoodnessFit(c(18, 22, 20), expected_probs = c(1/3, 1/3, 1/3), alpha = 0.05, categories = c("A", "B", "C"))
+  chiSqGoodnessFit(c(18, 22, 20), expected_probs = c(1/3, 1/3, 1/3), alpha = 0.05, categories = c("A", "B", "C"))
 )
 gof_expected <- rep(20, 3)
 gof_stat <- sum((c(18, 22, 20) - gof_expected)^2 / gof_expected)
@@ -276,19 +276,19 @@ check("gof structured p value", isTRUE(all.equal(gof_result$values$p_value, 1 - 
 check("gof preserves legacy text", grepl("Chi-Square Goodness of Fit Test", gof_result$output, fixed = TRUE))
 
 observed_table <- matrix(c(10, 20, 30, 25, 15, 20), nrow = 2, byrow = TRUE)
-ind_result <- env$capture_calculator_result(env$chiSqIndependence(observed_table, alpha = 0.05))
+ind_result <- env$capture_calculator_result(chiSqIndependence(observed_table, alpha = 0.05))
 ind_expected <- outer(rowSums(observed_table), colSums(observed_table)) / sum(observed_table)
 ind_stat <- sum((observed_table - ind_expected)^2 / ind_expected)
 check("independence structured statistic", isTRUE(all.equal(ind_result$values$statistic, ind_stat)))
 check("independence structured df", isTRUE(all.equal(ind_result$values$df, 2)))
 check("independence structured p value", isTRUE(all.equal(ind_result$values$p_value, 1 - pchisq(ind_stat, 2))))
 
-hom_result <- env$capture_calculator_result(env$chiSqHomogeneity(observed_table, alpha = 0.05))
+hom_result <- env$capture_calculator_result(chiSqHomogeneity(observed_table, alpha = 0.05))
 check("homogeneity structured statistic", isTRUE(all.equal(hom_result$values$statistic, ind_stat)))
 check("homogeneity structured expected table", isTRUE(all.equal(hom_result$values$expected_table, ind_expected)))
-expect_error("gof rejects probability sum", env$chiSqGoodnessFit(c(10, 20), expected_probs = c(0.2, 0.2)), "Expected probabilities must add to 1")
-expect_error("chi-square rejects one-row table", env$chiSqIndependence(matrix(c(1, 2), nrow = 1)), "at least 2 rows and 2 columns")
-expect_error("chi-square rejects negative count", env$chiSqHomogeneity(matrix(c(1, -2, 3, 4), nrow = 2)), "nonnegative")
+expect_error("gof rejects probability sum", chiSqGoodnessFit(c(10, 20), expected_probs = c(0.2, 0.2)), "Expected probabilities must add to 1")
+expect_error("chi-square rejects one-row table", chiSqIndependence(matrix(c(1, 2), nrow = 1)), "at least 2 rows and 2 columns")
+expect_error("chi-square rejects negative count", chiSqHomogeneity(matrix(c(1, -2, 3, 4), nrow = 2)), "nonnegative")
 
 for (fn in c(
   "binomialDistribution", "poissonDistribution", "hypergeometricDistribution",
@@ -342,14 +342,284 @@ formula_markup <- paste(as.character(env$render_formula_items(c(
 ))), collapse = "\n")
 check("concept rendering uses natural concept list", grepl("concept-list-clean", concept_markup, fixed = TRUE))
 check("concept rendering keeps unlabeled prose plain", grepl("concept-prose", concept_markup, fixed = TRUE))
-check("concept rendering does not bold terms", !grepl("<strong", concept_markup, fixed = TRUE))
-check("concept rendering does not use concept term class", !grepl("concept-term", concept_markup, fixed = TRUE))
+check("concept rendering bolds a leading term", grepl("<strong class=\"concept-term\">Population</strong>: the entire group", concept_markup, fixed = TRUE))
+check("concept rendering leaves items without a term unbolded", lengths(regmatches(concept_markup, gregexpr("<strong", concept_markup))) == 1)
 check("formula rendering uses shared rows", grepl("reference-row formula-row", formula_markup, fixed = TRUE))
 check("formula rendering keeps neutral equation class", grepl("formula-equation-inline", formula_markup, fixed = TRUE))
 ui_text <- paste(as.character(env$ui), collapse = "\n")
 check("examples tab hidden from main navigation", !grepl(">Examples<", ui_text, fixed = TRUE))
-check("concept bold term class removed", !grepl("concept-term", ui_text, fixed = TRUE))
 server_reference_text <- paste(readLines("R/server_reference.R", warn = FALSE), collapse = "\n")
 check("formula to concept link exists", grepl("Read related concept", server_reference_text, fixed = TRUE))
+
+two_z <- env$capture_calculator_result(twoIndMeansKnownSigma(50, 10.3911, 1, 50, 10, 1, alpha = 0.05))
+check("two-mean z test uses unrounded z for p-value", abs(two_z$values$p_value - 2 * pnorm(-1.9555)) < 1e-9)
+check("two-mean z test decision follows exact p-value", identical(two_z$values$decision, "Fail to Reject"))
+left_t <- env$capture_calculator_result(twoIndMeansEqVar(10, 4, 1, 10, 5, 1, alpha = 0.05, alternative = "less"))
+check("left-tailed two-sample critical value is negative", left_t$values$critical_value < 0)
+check("legacy two-sample test defaults alpha", !inherits(try(capture.output(twoIndMeanUneqVar(10, 5, 1, 10, 4, 1)), silent = TRUE), "try-error"))
+
+expect_error("frequency rejects empty input", frequencyPercent(numeric(0)), "at least 1")
+expect_error("frequency rejects negative counts", frequencyPercent(c(-1, 2)), "nonnegative")
+expect_error("frequency rejects zero total", frequencyPercent(c(0, 0)), "greater than 0")
+expect_error("percent to count rejects zero total", percentToCount(0, 20), "greater than 0")
+expect_error("percent to count rejects invalid percent", percentToCount(10, 101), "between 0 and 1")
+expect_error("class width rejects one limit", classWidth(10), "at least 2")
+expect_error("descriptive stats reject empty data", descStats(numeric(0)), "at least 2")
+expect_error("coefficient of variation rejects zero mean", coeffVariation(0, 1), "Mean cannot be 0")
+expect_error("Chebyshev rejects k of one", chebyshevRange(10, 2, 1), "greater than 1")
+expect_error("percentile rejects invalid percentile", percentileValue(1:3, 101), "between 0 and 100")
+expect_error("correlation rejects mismatched lengths", corrReg(1:3, 1:2), "same length")
+expect_error("correlation rejects one point", corrReg(1, 2), "at least 2")
+expect_error("prediction rejects mismatched lengths", predictY(1:2, 1:3, 4), "same length")
+expect_error("prediction rejects one point", predictY(1, 2, 4), "at least 2")
+expect_error("simple probability rejects excessive favorable", simpleProb(3, 2), "larger than total")
+expect_error("complement rejects invalid probability", complementProb(1.1), "between 0 and 1")
+expect_error("complement rejects zero total", complementProb(favorable = 0, total = 0), "greater than 0")
+expect_error("conditional probability rejects excessive joint count", conditionalProb(3, 2), "larger than given count")
+expect_error("table probability rejects negative counts", tableProb(matrix(c(-1, 2), nrow = 1)), "nonnegative")
+expect_error("table probability rejects zero total", tableProb(matrix(0, 2, 2)), "greater than 0")
+expect_error("discrete distribution rejects mismatched lengths", discreteDist(1:3, c(0.5, 0.5)), "same length")
+expect_error("discrete distribution rejects invalid probabilities", discreteDist(1:2, c(-0.1, 1.1)), "between 0 and 1")
+expect_error("distribution query rejects unknown type", probFromDist(1:2, c(0.5, 0.5), "unknown", 1), "Unknown probability type.")
+expect_error("uniform rejects equal endpoints", uniformDist(1, 1), "a must be less than b")
+expect_error("uniform rejects reversed bounds", uniformDist(0, 10, 8, 2), "less than or equal")
+expect_error("z score rejects zero sd", zScore(1, 0, 0), "greater than 0")
+expect_error("normal rejects negative sd", normalProb(0, -1), "greater than 0")
+expect_error("normal rejects reversed bounds", normalProb(0, 1, 2, 1), "less than or equal")
+expect_error("inverse normal rejects invalid probability", invNormal(-0.1), "greater than 0 and less than 1")
+expect_error("inverse normal rejects area of exactly 1", invNormal(1), "greater than 0 and less than 1")
+expect_error("sample mean rejects fractional n", sampleMeanDist(0, 1, 1.5), "whole number at least 1")
+expect_error("sample mean probability rejects zero sigma", sampleMeanProb(0, 0, 10), "greater than 0")
+expect_error("sample proportion rejects invalid p", samplePropDist(1.1, 10), "between 0 and 1")
+expect_error("sample proportion probability rejects zero n", samplePropProb(0.5, 0), "whole number at least 1")
+expect_error("chi-square critical rejects zero df", chiSqCriticalValue(0, 0.05), "whole number at least 1")
+expect_error("chi-square critical rejects invalid alpha", chiSqCriticalValue(2, 1), "greater than 0 and less than 1")
+expect_error("expected cell rejects zero grand total", expectedCellCount(1, 1, 0), "greater than 0")
+expect_error("expected cell rejects negative row total", expectedCellCount(-1, 1, 10), "0 or greater")
+
+for (expr in list(
+  quote(normalProb()), quote(sampleMeanProb(0, 1, 10)),
+  quote(samplePropProb(0.5, 10)), quote(uniformDist(0, 1, -Inf, Inf))
+)) {
+  output <- paste(capture.output(eval(expr)), collapse = "\n")
+  check(paste("infinite bounds remain valid for", deparse(expr)),
+        grepl("1.000000", output, fixed = TRUE))
+}
+
+labeled_table <- env$parse_contingency_table_text("Yes  No\nGroup 1  10  20\nGroup 2  30  40")
+check("pasted table preserves digits in row labels", identical(rownames(labeled_table), c("Group 1", "Group 2")))
+check("pasted table takes trailing counts", identical(unname(labeled_table), matrix(c(10, 20, 30, 40), 2, byrow = TRUE)))
+check("pasted table keeps header labels", identical(colnames(labeled_table), c("Yes", "No")))
+corner_table <- env$parse_contingency_table_text("Group  Yes  No\nA  10  20\nB  30  40")
+check("pasted table recognizes corner header", identical(colnames(corner_table), c("Yes", "No")))
+mixed_table <- env$parse_contingency_table_text("3 7 10\n2 4 9")
+check("pasted table keeps coincidental row sum", identical(unname(mixed_table), matrix(c(3, 7, 10, 2, 4, 9), 2, byrow = TRUE)))
+single_table <- env$parse_contingency_table_text("3 7 10")
+check("pasted table keeps single row with coincidental sum", identical(unname(single_table), matrix(c(3, 7, 10), nrow = 1)))
+totals_table <- env$parse_contingency_table_text("3 7 10\n2 4 6")
+check("pasted table drops totals shared by every row", identical(unname(totals_table), matrix(c(3, 7, 2, 4), 2, byrow = TRUE)))
+header_total_table <- env$parse_contingency_table_text("Group  Yes  No  Total\nGroup 1  3  7  11\nGroup 2  2  4  6\nTotal  5  11  17")
+check("explicit total header drops column and skips total row", identical(unname(header_total_table), matrix(c(3, 7, 2, 4), 2, byrow = TRUE)))
+check("explicit totals preserve label digits", identical(rownames(header_total_table), c("Group 1", "Group 2")))
+expect_error("pasted table preserves inconsistent row error", env$parse_contingency_table_text("1 2\n3 4 5"), "Rows have different numbers of counts.")
+expect_error("pasted table preserves no counts error", env$parse_contingency_table_text("Yes No"), "does not contain any numeric counts")
+expect_error("pasted table preserves totals only error", env$parse_contingency_table_text("Total 1 2 3"), "No observed-count rows were found")
+
+check("every formula topic has LaTeX", setequal(names(env$topic_formulas), names(env$topic_formulas_tex)))
+check("LaTeX formulas line up with plain-text formulas",
+      identical(lengths(env$topic_formulas), lengths(env$topic_formulas_tex[names(env$topic_formulas)])))
+formula_html <- as.character(env$render_formula_items("Mean: xbar = sum(x) / n", "\\bar{x}"))
+check("formula with LaTeX gets a typeset block", grepl("formula-math", formula_html, fixed = TRUE))
+
+# Verified calculator regressions (items 1-17).
+shiny::testServer(env$register_calculator_server, {
+  session$setInputs(fn = "chiSqGoodnessFit", gof_pasted_table = "A 90\nB 10",
+                    expected_probs = "0.9, 0.1", observed = "10, 10",
+                    categories = "A, B", alpha = "0.05", claim = "the proportions match", run = 1)
+  check("1 pasted GOF uses expected probabilities",
+        grepl("Test Statistic\\s+:\\s+0\\.000000", output$result))
+  gof_code <- eval(parse(text = output$rcode_used), new.env(parent = globalenv()))
+  check("6 GOF code uses pasted counts and expected probabilities", unname(gof_code$statistic) == 0)
+  session$setInputs(gof_pasted_table = "", observed = "90, 10", run = 2)
+  check("1 manual GOF uses expected probabilities",
+        grepl("Test Statistic\\s+:\\s+0\\.000000", output$result))
+  check("6 manual GOF code uses expected probabilities",
+        unname(eval(parse(text = output$rcode_used))$statistic) == 0)
+  session$setInputs(expected_probs = "", run = 3)
+  check("1 blank expected probabilities still means equal probabilities",
+        grepl("Test Statistic\\s+:\\s+64\\.000000", output$result))
+
+  session$setInputs(fn = "selectedPercent", frequency_pasted_table = "not a count table",
+                    frequencies = "5, 5", categories = "A, B", selected_positions = "1", run = 4)
+  check("2 invalid pasted frequencies report the parse error",
+        grepl("Input error: The pasted table does not contain observed counts.", output$result, fixed = TRUE))
+  session$setInputs(frequency_pasted_table = "1 90\n2 10", run = 5)
+  check("2 numeric category labels use pasted counts",
+        grepl("Percent\\s+:\\s+90\\.000000%", output$result))
+  session$setInputs(frequency_pasted_table = "", run = 6)
+  check("2 empty pasted frequencies still use manual counts",
+        grepl("Percent\\s+:\\s+50\\.000000%", output$result))
+
+  session$setInputs(fn = "chiSqIndependence", pasted_table = "Yes No\nA 3 7\nB 8 2",
+                    matrix_vals = "1, 2, 3, 4", nrow = 2,
+                    row_names = "A,B", col_names = "Yes,No", run = 7)
+  code_env <- new.env(parent = globalenv())
+  independence_code <- suppressWarnings(eval(parse(text = output$rcode_used), code_env))
+  expected_table <- matrix(c(3, 7, 8, 2), 2, byrow = TRUE)
+  check("6 independence code uses pasted table without continuity correction",
+        identical(unname(code_env$observed), expected_table) &&
+          isTRUE(all.equal(unname(independence_code$statistic),
+                           unname(suppressWarnings(chisq.test(expected_table, correct = FALSE))$statistic))))
+  session$setInputs(pasted_table = "", run = 8)
+  suppressWarnings(eval(parse(text = output$rcode_used), code_env))
+  check("6 independence code retains manual input path",
+        identical(unname(code_env$observed), matrix(c(1, 2, 3, 4), 2, byrow = TRUE)))
+
+  for (question in c("exact", "less", "greater", "between")) {
+    session$setInputs(fn = "normalProb", mean_val = 0, sd_val = 1,
+                      prob_type = question, lower = "-1", upper = "2", exact_value = "1", run = 9)
+    bounds <- env$probability_bounds(question, "-1", "2", "1")
+    actual <- eval(parse(text = output$rcode_used), new.env(parent = globalenv()))
+    check(paste("7 normal code uses selected", question, "bounds"),
+          isTRUE(all.equal(actual, pnorm(bounds$upper) - pnorm(bounds$lower))))
+  }
+
+  for (sample in c(FALSE, TRUE)) {
+    session$setInputs(fn = "groupedStats", midpoints = "1, 3", frequencies = "2, 2",
+                      sample = sample, run = 10)
+    code_env <- new.env(parent = globalenv())
+    eval(parse(text = output$rcode_used), code_env)
+    check(paste("8 grouped variance code respects sample =", sample),
+          isTRUE(all.equal(code_env$grouped_variance, if (sample) 4 / 3 else 1)))
+  }
+  session$setInputs(fn = "percentToCount", total = 10, percent = 150, run = 11)
+  check("12 percent to count UI rejects percent above 100",
+        grepl("Input error:", output$result, fixed = TRUE))
+})
+
+contingency_cases <- list(
+  list("Group  Yes  No\nGroup 1  10  20\nGroup 2  30  40",
+       c("Group 1", "Group 2"), c("Yes", "No"), c(10, 20, 30, 40)),
+  list("A  B  C\nX  3  7  10\nY  2  4  6",
+       c("X", "Y"), c("A", "B", "C"), c(3, 7, 10, 2, 4, 6)),
+  list("Low  Medium  High  Total\nX  10  20  30  60\nY  20  40  60  120",
+       c("X", "Y"), c("Low", "Medium", "High"), c(10, 20, 30, 20, 40, 60)),
+  list("Yes No\nGroup 1  10  20\nGroup 2  5  6",
+       c("Group 1", "Group 2"), c("Yes", "No"), c(10, 20, 5, 6)),
+  list("Gender Yes No\nMale 3 7\nFemale 10 4",
+       c("Male", "Female"), c("Yes", "No"), c(3, 7, 10, 4)),
+  list("Yes No Total\nA 3 7 10\nB 4 4 8\nTotal 7 11 18",
+       c("A", "B"), c("Yes", "No"), c(3, 7, 4, 4))
+)
+for (i in seq_along(contingency_cases)) {
+  case <- contingency_cases[[i]]
+  expected <- matrix(case[[4]], 2, byrow = TRUE, dimnames = list(case[[2]], case[[3]]))
+  check(paste("3 contingency table example", i),
+        identical(env$parse_contingency_table_text(case[[1]]), expected))
+}
+for (separator in c("\t", ",", "  ")) {
+  text <- paste(c(paste(c("Group", "Yes", "No"), collapse = separator),
+                  paste(c("Group 1", "10", "20"), collapse = separator),
+                  paste(c("Group 2", "30", "40"), collapse = separator)), collapse = "\n")
+  check("3 contingency table separates labels and counts by fields",
+        identical(env$parse_contingency_table_text(text),
+                  matrix(c(10, 20, 30, 40), 2, byrow = TRUE,
+                         dimnames = list(c("Group 1", "Group 2"), c("Yes", "No")))))
+}
+check("3 total header is case insensitive",
+      ncol(env$parse_contingency_table_text("Yes No tOtAl\nA 3 7 10\nB 4 4 8")) == 2)
+
+for (bounds in list(c(2, 3), c(-0.5, 0.5), c(-1, 1), c(0, 2))) {
+  output <- paste(capture.output(env$chebyshevCalc(0, 1, "percent_between",
+                                                lower = bounds[1], upper = bounds[2])), collapse = "\n")
+  check("4 Chebyshev gives no useful minimum for off-center or narrow intervals",
+        grepl("no useful minimum", output, fixed = TRUE) &&
+          grepl("At Least\\s+:\\s+0\\.000000%", output))
+}
+check("4 Chebyshev still bounds centered intervals",
+      any(grepl("At Least\\s+:\\s+75\\.000000%",
+                capture.output(env$chebyshevCalc(0, 1, "percent_between", lower = -2, upper = 3)))))
+expect_error("4 Chebyshev rejects zero sd", env$chebyshevCalc(0, 0, "percent_between", lower = -2, upper = 2), "Standard deviation must be greater than 0")
+
+for (case in list(c(1, 2, 13.5), c(-2, -1, 13.5), c(-1, 2, 81.5), c(-3, 3, 99.7),
+                  c(0, 1, 34), c(0, 0, 0), c(3, Inf, 0.15), c(-Inf, -3, 0.15))) {
+  output <- capture.output(env$empiricalRuleCalc(0, 1, case[1], case[2]))
+  check("5 empirical rule sums the correct halves and tails",
+        any(grepl(sprintf("%10.6f%%", case[3]), output, fixed = TRUE)))
+}
+expect_error("5 empirical rule rejects fractional sd bounds", env$empiricalRuleCalc(0, 1, 0.5, 2), "Use the normal probability calculator")
+expect_error("5 empirical rule rejects finite bounds beyond three sd", env$empiricalRuleCalc(0, 1, 1, 4), "Use the normal probability calculator")
+expect_error("5 empirical rule rejects zero sd", env$empiricalRuleCalc(0, 0, -1, 1), "Standard deviation must be greater than 0")
+expect_error("5 empirical rule rejects reversed bounds", env$empiricalRuleCalc(0, 1, 2, 1), "less than or equal")
+
+expect_error("9 EMV rejects probabilities that do not sum to one", env$expectedMonetaryValueCalc(c(100, 0), c(0.2, 0.2)), "Probabilities must add to 1")
+check("9 EMV accepts probability sum within tolerance",
+      env$capture_calculator_result(env$expectedMonetaryValueCalc(c(100, 0), c(0.5, 0.5000005)))$ok)
+
+for (counts in list(c(-1, 2, 0, 10), c(1.5, 2, 0, 10), c(2, -1, 0, 10),
+                    c(2, 1.5, 0, 10), c(2, 2, -1, 10), c(2, 2, 0.5, 10),
+                    c(2, 2, 0, 0), c(2, 2, 0, 3.5))) {
+  expect_error("10 addition rule rejects invalid counts", do.call(env$additionRuleCalc, as.list(counts)), "whole number")
+}
+expect_error("10 addition rule rejects overlap above A", env$additionRuleCalc(1, 3, 2, 10), "Overlap count cannot exceed")
+expect_error("10 addition rule rejects overlap above B", env$additionRuleCalc(3, 1, 2, 10), "Overlap count cannot exceed")
+expect_error("10 addition rule rejects union above total", env$additionRuleCalc(8, 8, 0, 10), "Union count cannot exceed")
+check("10 addition rule allows empty events", env$capture_calculator_result(env$additionRuleCalc(0, 0, 0, 10))$ok)
+
+table_counts <- matrix(c(-1, 2, 0, 0), 2, byrow = TRUE,
+                       dimnames = list(c("A", "B"), c("X", "Y")))
+expect_error("11 table probability rejects negative counts", env$tableProbabilityCalc(table_counts, "A", "X", "joint"), "nonnegative")
+table_counts[1, 1] <- 1
+expect_error("11 table probability rejects empty conditional row", env$tableProbabilityCalc(table_counts, "B", "X", "given_row"), "Denominator must be greater than 0")
+table_counts[, 1] <- 0
+expect_error("11 table probability rejects empty conditional column", env$tableProbabilityCalc(table_counts, "A", "X", "given_column"), "Denominator must be greater than 0")
+table_counts[,] <- 0
+expect_error("11 table probability rejects empty table", env$tableProbabilityCalc(table_counts, "A"), "Denominator must be greater than 0")
+expect_error("12 percent amount rejects zero total", env$percentAmountCalc(0, 50), "Total must be greater than 0")
+expect_error("12 percent amount rejects negative percent", env$percentAmountCalc(10, -1), "between 0 and 1")
+expect_error("12 percent amount rejects percent above 100", env$percentAmountCalc(10, 150), "between 0 and 1")
+check("12 percent amount allows endpoints", all(vapply(c(0, 100), function(p) env$capture_calculator_result(env$percentAmountCalc(10, p))$ok, logical(1))))
+
+expect_error("13 confidence and alpha must agree", resolve_conf_alpha(0.95, 0.1), "Enter either a confidence level or alpha, not two values that disagree.")
+check("13 confidence and alpha allow matching values", identical(resolve_conf_alpha(0.95, 0.05), list(conf_level = 0.95, alpha = 0.05)))
+check("13 confidence and alpha allow rounding tolerance", identical(resolve_conf_alpha(0.95, 0.05 + 5e-10)$conf_level, 0.95))
+check("14 coefficient of variation accepts zero sd",
+      any(grepl("CV\\s+:\\s+0\\.000000%", capture.output(coeffVariation(10, 0)))))
+expect_error("14 coefficient of variation still rejects negative sd", coeffVariation(10, -1), "Standard deviation must be 0 or greater")
+for (success in 0:1) {
+  for (size in 0:1) {
+    result <- env$capture_calculator_result(env$hypergeometricCalc(1, success, size, "expected"))
+    check("15 singleton hypergeometric has zero sd", identical(result$values$standard_deviation, 0))
+  }
+}
+
+tail_result <- env$capture_calculator_result(chiSqGoodnessFit(c(100, 0)))
+check("16 GOF retains tiny upper-tail p value",
+      tail_result$values$p_value > 0 && abs(tail_result$values$p_value / pchisq(100, 1, lower.tail = FALSE) - 1) < 1e-12)
+for (case in list(
+  list(quote(meanKnownSigmaTest(100, 10, 0, 10, alternative = "greater")), pnorm(10, lower.tail = FALSE)),
+  list(quote(meanTTest(100, 10, 0, 1, alternative = "greater")), pt(100, 99, lower.tail = FALSE)),
+  list(quote(env$varianceTestCalc(11, 10, 1, alternative = "two.sided")), 2 * pchisq(1000, 10, lower.tail = FALSE)),
+  list(quote(env$twoVarianceRatioCalc(10, 1e6, 10, 1, alternative = "two.sided")), 2 * pf(1e6, 9, 9, lower.tail = FALSE))
+)) {
+  result <- env$capture_calculator_result(eval(case[[1]]))
+  check("16 continuous tests retain tiny upper tails", result$ok && result$values$p_value > 0 &&
+          abs(result$values$p_value / case[[2]] - 1) < 1e-12)
+}
+for (case in list(
+  list(quote(env$binomialCalc(100, 0.5, "greater", 95)), pbinom(95, 100, 0.5, lower.tail = FALSE)),
+  list(quote(env$poissonCalc(1, 1, "greater_equal", 31)), ppois(30, 1, lower.tail = FALSE)),
+  list(quote(env$hypergeometricCalc(200, 100, 100, "greater", 95)), phyper(95, 100, 100, 100, lower.tail = FALSE))
+)) {
+  result <- env$capture_calculator_result(eval(case[[1]]))
+  check("16 discrete calculators retain tiny upper tails", result$ok && result$values$probability > 0 &&
+          abs(result$values$probability / case[[2]] - 1) < 1e-12)
+}
+check("16 no subtractive upper-tail calls remain in calculator source or generated code",
+      !any(vapply(c("R/statistics_core.R", "R/calculator_helpers.R", "R/server_calculators.R"),
+                  function(path) any(grepl("1\\s*-\\s*p(norm|t|chisq|f|binom|pois|hyper)\\(", readLines(path))), logical(1))))
+check("17 pasted numbers accept scientific notation",
+      identical(env$parse_data_numbers("1e3, 2e3, -2.5E-2, +.5e+2, 3.e1, \u22124e-1"),
+                c(1000, 2000, -0.025, 50, 30, -0.4)))
 
 cat("Calculator reliability checks passed\n")

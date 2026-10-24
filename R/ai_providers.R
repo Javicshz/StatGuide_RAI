@@ -1,6 +1,6 @@
 # AI provider planning and request helpers.
-# Online provider calls remain disabled until credential and privacy behavior
-# is implemented. Ollama is supported as a local-only provider.
+# Local providers (Ollama, Codex CLI, Claude Code CLI, localhost OpenAI-compatible
+# servers) run without send approval. Online APIs require explicit approval.
 
 `%||%` <- function(x, y) {
   if (is.null(x)) y else x
@@ -248,10 +248,10 @@ ai_provider_summary <- function(provider, model, endpoint, key_env, local_app) {
     paste("Model:", ifelse(nzchar(model), model, "not selected")),
     paste("Endpoint:", ifelse(nzchar(endpoint), endpoint, ai_openai_endpoint(endpoint, provider))),
     paste("API key environment variable:", ifelse(nzchar(key_env), key_env, "not specified")),
-    if (provider %in% c("openai", "generic_openai")) {
-      "Current behavior: OpenAI-compatible chat completion requests are supported after explicit send approval."
+    if (ai_is_local_endpoint(endpoint)) {
+      "Current behavior: local OpenAI-compatible server. No API key or send approval needed."
     } else {
-      "Current behavior: request interface exists, but no Anthropic online API call is made yet."
+      "Current behavior: OpenAI-compatible chat completion requests are supported after explicit send approval."
     }
   )
 }
@@ -318,25 +318,29 @@ ai_json_response <- function(response) {
   jsonlite::fromJSON(text, simplifyVector = FALSE)
 }
 
-ai_ollama_request <- function(path, method = "GET", body = NULL, endpoint = "", timeout = 60) {
-  if (!requireNamespace("curl", quietly = TRUE)) {
-    return(list(ok = FALSE, status = "missing_dependency", message = "The curl R package is required for Ollama support."))
-  }
-  if (!requireNamespace("jsonlite", quietly = TRUE)) {
-    return(list(ok = FALSE, status = "missing_dependency", message = "The jsonlite R package is required for Ollama support."))
+# Shared JSON-over-HTTP call for Ollama, OpenAI-compatible, and Anthropic APIs.
+# status_prefix names the statuses (e.g. "ollama" -> "ollama_unreachable"); who
+# names the server in error messages.
+ai_http_json <- function(url, method = "GET", body = NULL, headers = list(), timeout = 90,
+                         connect_timeout = 10, feature, status_prefix, who, unreachable_message) {
+  for (pkg in c("curl", "jsonlite")) {
+    if (!requireNamespace(pkg, quietly = TRUE)) {
+      return(list(ok = FALSE, status = "missing_dependency", message = paste("The", pkg, "R package is required for", feature, "support.")))
+    }
   }
 
-  url <- paste0(ai_ollama_endpoint(endpoint), path)
   handle <- curl::new_handle()
-  curl::handle_setopt(handle, timeout = timeout, connecttimeout = 5)
-
+  curl::handle_setopt(handle, timeout = timeout, connecttimeout = connect_timeout)
   if (identical(method, "POST")) {
     curl::handle_setopt(
       handle,
       customrequest = "POST",
       postfields = jsonlite::toJSON(body, auto_unbox = TRUE, null = "null")
     )
-    curl::handle_setheaders(handle, "Content-Type" = "application/json")
+    headers[["Content-Type"]] <- "application/json"
+  }
+  if (length(headers)) {
+    do.call(curl::handle_setheaders, c(list(handle), headers))
   }
 
   response <- tryCatch(
@@ -347,13 +351,8 @@ ai_ollama_request <- function(path, method = "GET", body = NULL, endpoint = "", 
   if (inherits(response, "error")) {
     return(list(
       ok = FALSE,
-      status = "ollama_unreachable",
-      message = paste(
-        "Could not reach Ollama at",
-        ai_ollama_endpoint(endpoint),
-        "\nStart Ollama, confirm the endpoint, and try again.\n\nDetails:",
-        conditionMessage(response)
-      )
+      status = paste0(status_prefix, "_unreachable"),
+      message = paste(unreachable_message, "\n\nDetails:", conditionMessage(response))
     ))
   }
 
@@ -361,21 +360,45 @@ ai_ollama_request <- function(path, method = "GET", body = NULL, endpoint = "", 
   if (inherits(parsed, "error")) {
     return(list(
       ok = FALSE,
-      status = "ollama_bad_json",
-      message = paste("Ollama returned a response that could not be parsed as JSON.", conditionMessage(parsed))
+      status = paste0(status_prefix, "_bad_json"),
+      message = paste(who, "returned a response that could not be parsed as JSON.", conditionMessage(parsed))
     ))
   }
 
   if (response$status_code < 200 || response$status_code >= 300) {
-    ollama_error <- parsed$error %||% rawToChar(response$content)
+    server_error <- parsed$error
+    if (is.list(server_error)) {
+      server_error <- server_error$message
+    }
+    if (is.null(server_error)) {
+      server_error <- rawToChar(response$content)
+    }
     return(list(
       ok = FALSE,
-      status = "ollama_http_error",
-      message = paste("Ollama returned HTTP", response$status_code, "-", ollama_error)
+      status = paste0(status_prefix, "_http_error"),
+      message = paste(who, "returned HTTP", response$status_code, "-", server_error)
     ))
   }
 
   list(ok = TRUE, status = "ok", data = parsed)
+}
+
+ai_ollama_request <- function(path, method = "GET", body = NULL, endpoint = "", timeout = 60) {
+  ai_http_json(
+    paste0(ai_ollama_endpoint(endpoint), path),
+    method = method,
+    body = body,
+    timeout = timeout,
+    connect_timeout = 5,
+    feature = "Ollama",
+    status_prefix = "ollama",
+    who = "Ollama",
+    unreachable_message = paste(
+      "Could not reach Ollama at",
+      ai_ollama_endpoint(endpoint),
+      "\nStart Ollama, confirm the endpoint, and try again."
+    )
+  )
 }
 
 ai_ollama_connection_summary <- function(endpoint = "") {
@@ -467,6 +490,17 @@ ai_openai_endpoint <- function(endpoint, provider = "openai") {
   sub("/+$", "", endpoint)
 }
 
+# LM Studio, llama.cpp, vLLM, and Ollama's /v1 serve OpenAI-style APIs on localhost.
+ai_is_local_endpoint <- function(endpoint) {
+  endpoint <- trimws(endpoint %||% "")
+  authority <- sub("^https?://([^/?#]*).*$", "\\1", endpoint, ignore.case = TRUE)
+  # Not a URL, or user info such as "localhost:1@other.host" that points elsewhere.
+  if (identical(authority, endpoint) || grepl("@", authority, fixed = TRUE)) {
+    return(FALSE)
+  }
+  tolower(sub(":[0-9]*$", "", authority)) %in% c("localhost", "127.0.0.1", "[::1]")
+}
+
 ai_openai_key_env <- function(key_env, provider = "openai") {
   key_env <- trimws(key_env %||% "")
   if (nzchar(key_env)) {
@@ -479,13 +513,6 @@ ai_openai_key_env <- function(key_env, provider = "openai") {
 }
 
 ai_openai_request <- function(path, method = "GET", body = NULL, settings, timeout = 90) {
-  if (!requireNamespace("curl", quietly = TRUE)) {
-    return(list(ok = FALSE, status = "missing_dependency", message = "The curl R package is required for OpenAI-compatible API support."))
-  }
-  if (!requireNamespace("jsonlite", quietly = TRUE)) {
-    return(list(ok = FALSE, status = "missing_dependency", message = "The jsonlite R package is required for OpenAI-compatible API support."))
-  }
-
   endpoint <- ai_openai_endpoint(settings$endpoint, settings$provider)
   if (!nzchar(endpoint)) {
     return(list(
@@ -497,7 +524,7 @@ ai_openai_request <- function(path, method = "GET", body = NULL, settings, timeo
 
   key_env <- ai_openai_key_env(settings$key_env, settings$provider)
   api_key <- Sys.getenv(key_env, unset = "")
-  if (!nzchar(api_key)) {
+  if (!nzchar(api_key) && !ai_is_local_endpoint(endpoint)) {
     return(list(
       ok = FALSE,
       status = "missing_credentials",
@@ -505,55 +532,17 @@ ai_openai_request <- function(path, method = "GET", body = NULL, settings, timeo
     ))
   }
 
-  url <- paste0(endpoint, path)
-  handle <- curl::new_handle()
-  curl::handle_setopt(handle, timeout = timeout, connecttimeout = 10)
-  curl::handle_setheaders(
-    handle,
-    "Authorization" = paste("Bearer", api_key),
-    "Content-Type" = "application/json"
+  ai_http_json(
+    paste0(endpoint, path),
+    method = method,
+    body = body,
+    headers = if (nzchar(api_key)) list("Authorization" = paste("Bearer", api_key)) else list(),
+    timeout = timeout,
+    feature = "OpenAI-compatible API",
+    status_prefix = "online_provider",
+    who = "Provider",
+    unreachable_message = paste("Could not reach", endpoint)
   )
-
-  if (identical(method, "POST")) {
-    curl::handle_setopt(
-      handle,
-      customrequest = "POST",
-      postfields = jsonlite::toJSON(body, auto_unbox = TRUE, null = "null")
-    )
-  }
-
-  response <- tryCatch(
-    curl::curl_fetch_memory(url, handle = handle),
-    error = function(e) e
-  )
-
-  if (inherits(response, "error")) {
-    return(list(
-      ok = FALSE,
-      status = "online_provider_unreachable",
-      message = paste("Could not reach", endpoint, "\n\nDetails:", conditionMessage(response))
-    ))
-  }
-
-  parsed <- tryCatch(ai_json_response(response), error = function(e) e)
-  if (inherits(parsed, "error")) {
-    return(list(
-      ok = FALSE,
-      status = "online_provider_bad_json",
-      message = paste("Provider returned a response that could not be parsed as JSON.", conditionMessage(parsed))
-    ))
-  }
-
-  if (response$status_code < 200 || response$status_code >= 300) {
-    provider_error <- parsed$error$message %||% parsed$error %||% rawToChar(response$content)
-    return(list(
-      ok = FALSE,
-      status = "online_provider_http_error",
-      message = paste("Provider returned HTTP", response$status_code, "-", provider_error)
-    ))
-  }
-
-  list(ok = TRUE, status = "ok", data = parsed)
 }
 
 ai_openai_connection_summary <- function(settings) {
@@ -647,13 +636,6 @@ ai_anthropic_key_env <- function(key_env) {
 }
 
 ai_anthropic_request <- function(path, method = "GET", body = NULL, settings, timeout = 90) {
-  if (!requireNamespace("curl", quietly = TRUE)) {
-    return(list(ok = FALSE, status = "missing_dependency", message = "The curl R package is required for Anthropic API support."))
-  }
-  if (!requireNamespace("jsonlite", quietly = TRUE)) {
-    return(list(ok = FALSE, status = "missing_dependency", message = "The jsonlite R package is required for Anthropic API support."))
-  }
-
   endpoint <- ai_anthropic_endpoint(settings$endpoint)
   key_env <- ai_anthropic_key_env(settings$key_env)
   api_key <- Sys.getenv(key_env, unset = "")
@@ -665,56 +647,17 @@ ai_anthropic_request <- function(path, method = "GET", body = NULL, settings, ti
     ))
   }
 
-  url <- paste0(endpoint, path)
-  handle <- curl::new_handle()
-  curl::handle_setopt(handle, timeout = timeout, connecttimeout = 10)
-  curl::handle_setheaders(
-    handle,
-    "x-api-key" = api_key,
-    "anthropic-version" = "2023-06-01",
-    "Content-Type" = "application/json"
+  ai_http_json(
+    paste0(endpoint, path),
+    method = method,
+    body = body,
+    headers = list("x-api-key" = api_key, "anthropic-version" = "2023-06-01"),
+    timeout = timeout,
+    feature = "Anthropic API",
+    status_prefix = "anthropic",
+    who = "Anthropic",
+    unreachable_message = paste("Could not reach", endpoint)
   )
-
-  if (identical(method, "POST")) {
-    curl::handle_setopt(
-      handle,
-      customrequest = "POST",
-      postfields = jsonlite::toJSON(body, auto_unbox = TRUE, null = "null")
-    )
-  }
-
-  response <- tryCatch(
-    curl::curl_fetch_memory(url, handle = handle),
-    error = function(e) e
-  )
-
-  if (inherits(response, "error")) {
-    return(list(
-      ok = FALSE,
-      status = "anthropic_unreachable",
-      message = paste("Could not reach", endpoint, "\n\nDetails:", conditionMessage(response))
-    ))
-  }
-
-  parsed <- tryCatch(ai_json_response(response), error = function(e) e)
-  if (inherits(parsed, "error")) {
-    return(list(
-      ok = FALSE,
-      status = "anthropic_bad_json",
-      message = paste("Anthropic returned a response that could not be parsed as JSON.", conditionMessage(parsed))
-    ))
-  }
-
-  if (response$status_code < 200 || response$status_code >= 300) {
-    provider_error <- parsed$error$message %||% parsed$error %||% rawToChar(response$content)
-    return(list(
-      ok = FALSE,
-      status = "anthropic_http_error",
-      message = paste("Anthropic returned HTTP", response$status_code, "-", provider_error)
-    ))
-  }
-
-  list(ok = TRUE, status = "ok", data = parsed)
 }
 
 ai_anthropic_connection_summary <- function(settings) {
@@ -800,11 +743,25 @@ ai_command_path <- function(command) {
     return("")
   }
   if (file.exists(command)) {
-    return(command)
+    return(normalizePath(path.expand(command)))
   }
   found <- Sys.which(command)
   if (nzchar(found)) {
     return(unname(found))
+  }
+  # R started from RStudio or a launcher often lacks the shell PATH, so check
+  # the usual install folders for Claude Code, Codex, Homebrew, and npm.
+  candidates <- c(
+    file.path(path.expand("~"), ".local", "bin", command),
+    file.path("/opt/homebrew/bin", command),
+    file.path("/usr/local/bin", command),
+    file.path(path.expand("~"), ".npm-global", "bin", command),
+    file.path(Sys.getenv("APPDATA"), "npm", paste0(command, ".cmd")),
+    file.path(Sys.getenv("USERPROFILE"), ".local", "bin", paste0(command, ".exe"))
+  )
+  found <- candidates[file.exists(candidates)]
+  if (length(found)) {
+    return(found[1])
   }
   ""
 }
@@ -829,6 +786,16 @@ ai_claude_code_command <- function(command) {
   "claude"
 }
 
+# Windows cannot start npm's .cmd shims directly, so run them through cmd.exe.
+# ponytail: untested on Windows; /s /c with outer quotes is cmd's documented quoting form.
+ai_cli_invocation <- function(resolved, args = character(0)) {
+  if (.Platform$OS.type == "windows" && grepl("\\.(cmd|bat)$", resolved, ignore.case = TRUE)) {
+    inner <- paste(c(shQuote(resolved), args), collapse = " ")
+    return(list(command = Sys.getenv("COMSPEC", "cmd.exe"), args = c("/s", "/c", paste0('"', inner, '"'))))
+  }
+  list(command = resolved, args = args)
+}
+
 ai_cli_check <- function(command, label) {
   resolved <- ai_command_path(command)
   if (!nzchar(resolved)) {
@@ -839,10 +806,15 @@ ai_cli_check <- function(command, label) {
     ))
   }
 
+  call <- ai_cli_invocation(resolved, "--version")
   version <- tryCatch(
-    system2(resolved, "--version", stdout = TRUE, stderr = TRUE, timeout = 15),
+    suppressWarnings(system2(call$command, call$args, stdout = TRUE, stderr = TRUE, timeout = 15)),
     error = function(e) e
   )
+  status <- attr(version, "status")
+  if (!inherits(version, "error") && !is.null(status) && !identical(status, 0L)) {
+    version <- simpleError(paste0("exit status ", status, ": ", paste(version, collapse = "\n")))
+  }
 
   if (inherits(version, "error")) {
     return(list(
@@ -872,14 +844,15 @@ ai_cli_run <- function(command, args, input = NULL, label = "CLI", timeout = 120
     ))
   }
 
+  # system2 quotes the command but not args, and runs through the shell.
+  call <- ai_cli_invocation(resolved, shQuote(args))
   output <- tryCatch(
-    system2(resolved, args = args, input = input, stdout = TRUE, stderr = TRUE, timeout = timeout),
-    warning = function(w) w,
+    suppressWarnings(system2(call$command, args = call$args, input = input, stdout = TRUE, stderr = TRUE, timeout = timeout)),
     error = function(e) e
   )
 
   status <- attr(output, "status")
-  if (inherits(output, "warning") || inherits(output, "error") || (!is.null(status) && !identical(status, 0L))) {
+  if (inherits(output, "error") || (!is.null(status) && !identical(status, 0L))) {
     detail <- if (inherits(output, "condition")) conditionMessage(output) else paste(output, collapse = "\n")
     return(list(
       ok = FALSE,
@@ -940,13 +913,13 @@ ai_codex_cli_generate <- function(prompt, settings) {
 
 ai_claude_code_generate <- function(prompt, settings) {
   command <- ai_claude_code_command(settings$local_app)
-  args <- c("-p", prompt, "--output-format", "text")
+  args <- c("-p", "--output-format", "text")
   model <- trimws(settings$model %||% "")
   if (nzchar(model)) {
     args <- c(args, "--model", model)
   }
 
-  result <- ai_cli_run(command, args, label = "Claude Code CLI", timeout = 180)
+  result <- ai_cli_run(command, args, input = prompt, label = "Claude Code CLI", timeout = 180)
   if (!isTRUE(result$ok)) {
     return(result)
   }
@@ -981,7 +954,16 @@ send_ai_request <- function(prompt, task, question, context, settings) {
     ))
   }
 
+  blocked <- list(
+    ok = FALSE,
+    status = "blocked_external_send",
+    message = "This provider sends your prompt to another computer, but external-send approval is unchecked. Review the prompt for private data, then explicitly approve sending."
+  )
+
   if (provider == "ollama") {
+    if (!ai_is_local_endpoint(ai_ollama_endpoint(settings$endpoint)) && !isTRUE(settings$allow_external)) {
+      return(blocked)
+    }
     return(ai_ollama_generate(prompt, settings))
   }
 
@@ -993,12 +975,9 @@ send_ai_request <- function(prompt, task, question, context, settings) {
     return(ai_claude_code_generate(prompt, settings))
   }
 
-  if (provider %in% c("openai", "anthropic", "generic_openai") && !isTRUE(settings$allow_external)) {
-    return(list(
-      ok = FALSE,
-      status = "blocked_external_send",
-      message = "Online provider selected, but external-send approval is unchecked. Review the prompt for private data, then explicitly approve sending before a live adapter can use it."
-    ))
+  local_openai <- provider %in% c("openai", "generic_openai") && ai_is_local_endpoint(settings$endpoint)
+  if (provider %in% c("openai", "anthropic", "generic_openai") && !local_openai && !isTRUE(settings$allow_external)) {
+    return(blocked)
   }
 
   if (provider %in% c("openai", "generic_openai")) {
