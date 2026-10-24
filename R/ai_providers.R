@@ -743,6 +743,20 @@ ai_command_path <- function(command) {
   if (nzchar(found)) {
     return(unname(found))
   }
+  # R started from RStudio or a launcher often lacks the shell PATH, so check
+  # the usual install folders for Claude Code, Codex, Homebrew, and npm.
+  candidates <- c(
+    file.path(path.expand("~"), ".local", "bin", command),
+    file.path("/opt/homebrew/bin", command),
+    file.path("/usr/local/bin", command),
+    file.path(path.expand("~"), ".npm-global", "bin", command),
+    file.path(Sys.getenv("APPDATA"), "npm", paste0(command, ".cmd")),
+    file.path(Sys.getenv("USERPROFILE"), ".local", "bin", paste0(command, ".exe"))
+  )
+  found <- candidates[file.exists(candidates)]
+  if (length(found)) {
+    return(found[1])
+  }
   ""
 }
 

@@ -110,6 +110,37 @@ Install the packages if needed:
 install.packages(c("shiny", "curl", "jsonlite", "mirai"))
 ```
 
+## Quick Start (No Coding Needed)
+
+1. Install R from [cran.r-project.org](https://cran.r-project.org) if you do not have it yet.
+2. Download this project: on GitHub click **Code**, then **Download ZIP**, and unzip it.
+3. Open the project folder and double-click the launcher:
+   - Mac: **Start StatGuide.command**
+   - Windows: **Start StatGuide.bat**
+4. The app opens in your web browser. The first start takes a minute while it installs the R packages it needs.
+5. Keep the small terminal window open while you use the app. Close it to stop the app.
+
+If your Mac says the file "cannot be opened because it is from an unidentified developer", right-click the file, choose **Open**, then click **Open** again. You only need to do this once.
+
+To connect an AI model, click **New to AI? Set up a model step by step** in the Ask AI tab. It walks you through each option in plain language and checks that it works.
+
+### Running From A Terminal
+
+R files run with R, not Python, and typing a file name alone does not run it. From the project folder:
+
+```bash
+Rscript app.R
+```
+
+`run_ai.R` and `run_console.R` are for an interactive R session, because they load helpers that you then type commands into. Start R by typing `R` in the terminal (or open RStudio), then:
+
+```r
+source("run_ai.R")       # AI helpers such as codex("...") and ollama("...")
+source("run_console.R")  # numbered menu
+```
+
+Type `q()` to leave R.
+
 ## Run The App
 
 There are three local entry points:

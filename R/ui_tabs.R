@@ -4,6 +4,8 @@ ask_ai_tab <- tabPanel(
   "Ask AI",
   sidebarLayout(
     sidebarPanel(
+      actionButton("ai_setup_guide_ask", "New to AI? Set up a model step by step", class = "btn-block"),
+      tags$br(),
       selectInput("ai_task", "What do you want AI to help with?", choices = ai_task_choices),
       textAreaInput(
         "ai_question",
@@ -64,6 +66,8 @@ ai_settings_tab <- tabPanel(
   "AI Settings",
   sidebarLayout(
     sidebarPanel(
+      actionButton("ai_setup_guide", "Help me connect an AI (step by step)", class = "btn-block"),
+      tags$br(),
       selectInput("ai_provider", "AI provider", choices = ai_provider_choices),
       uiOutput("ai_provider_settings_ui"),
       checkboxInput("ai_store_no_secrets", "Do not store raw API keys in this app", TRUE),
