@@ -1481,6 +1481,14 @@ parse_contingency_table_text <- function(text) {
   } else {
     column_labels <- header_parts
     count_with_total <- NA_integer_
+    if (length(header_parts)) {
+      data_rows <- lines[data_line & !grepl("^total([[:space:],]|$)", lines, ignore.case = TRUE)]
+      number_counts <- lengths(regmatches(data_rows, gregexpr(number_pattern, data_rows, perl = TRUE)))
+      if (length(number_counts) && all(number_counts == length(header_parts) - 1)) {
+        column_labels <- header_parts[-1]
+      }
+      count_with_total <- length(column_labels)
+    }
   }
 
   row_labels <- c()
@@ -1506,10 +1514,6 @@ parse_contingency_table_text <- function(text) {
     if (tolower(label) == "total") {
       next
     }
-    if (length(nums) >= 2 && isTRUE(all.equal(sum(nums[-length(nums)]), nums[length(nums)]))) {
-      nums <- nums[-length(nums)]
-    }
-
     rows[[length(rows) + 1]] <- nums
     row_labels <- c(row_labels, label)
   }
@@ -1521,6 +1525,13 @@ parse_contingency_table_text <- function(text) {
   column_count <- unique(lengths(rows))
   if (length(column_count) != 1) {
     stop("Rows have different numbers of counts. Check the pasted table formatting.")
+  }
+
+  drop_total <- total_in_header || (length(rows) >= 2 && all(vapply(rows, function(nums) {
+    length(nums) >= 2 && isTRUE(all.equal(sum(nums[-length(nums)]), nums[length(nums)]))
+  }, logical(1))))
+  if (drop_total) {
+    rows <- lapply(rows, function(nums) nums[-length(nums)])
   }
 
   observed <- matrix(unlist(rows), nrow = length(rows), byrow = TRUE)

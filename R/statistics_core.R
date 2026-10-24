@@ -447,6 +447,12 @@ print_two_sample_ci_interpretation <- function(conf_level, lower, upper, digits 
 ###############################################################################
 
 frequencyPercent <- function(frequencies, categories = NULL) {
+  frequencies <- require_numeric_vector(frequencies, "Frequencies")
+  if (any(frequencies < 0)) {
+    stop("Frequencies must be nonnegative.")
+  }
+  require_positive_num(sum(frequencies), "Total")
+
   # frequencies = vector of category frequencies
   # categories = optional category names
   
@@ -475,6 +481,10 @@ frequencyPercent <- function(frequencies, categories = NULL) {
 ###############################################################################
 
 percentToCount <- function(total, percent) {
+  total <- require_positive_num(total, "Total")
+  percent <- require_num(percent, "Percent")
+  require_probability_num(percent / 100, "Percent divided by 100")
+
   # total = total number of observations
   # percent = percent as a whole number, such as 20 for 20%
   
@@ -494,6 +504,8 @@ percentToCount <- function(total, percent) {
 ###############################################################################
 
 classWidth <- function(lower_limits) {
+  lower_limits <- require_numeric_vector(lower_limits, "Class lower limits", 2)
+
   # lower_limits = class lower limits from a grouped frequency table
   
   widths <- diff(lower_limits)
@@ -531,6 +543,8 @@ classWidth <- function(lower_limits) {
 ###############################################################################
 
 descStats <- function(data, sample = TRUE) {
+  data <- require_numeric_vector(data, "Data", if (sample) 2 else 1)
+
   # data = raw numerical data
   # sample = TRUE for sample variance/sd, FALSE for population variance/sd
   
@@ -567,6 +581,12 @@ descStats <- function(data, sample = TRUE) {
 ###############################################################################
 
 coeffVariation <- function(mean_val, sd_val) {
+  mean_val <- require_num(mean_val, "Mean")
+  sd_val <- require_positive_num(sd_val, "Standard deviation")
+  if (mean_val == 0) {
+    stop("Mean cannot be 0.")
+  }
+
   cv <- sd_val / mean_val * 100
   
   cat("--------------------------------------------------\n")
@@ -583,6 +603,13 @@ coeffVariation <- function(mean_val, sd_val) {
 ###############################################################################
 
 chebyshevRange <- function(mean_val, sd_val, k) {
+  mean_val <- require_num(mean_val, "Mean")
+  sd_val <- require_positive_num(sd_val, "Standard deviation")
+  k <- require_num(k, "k")
+  if (k <= 1) {
+    stop("k must be greater than 1.")
+  }
+
   lower <- mean_val - k * sd_val
   upper <- mean_val + k * sd_val
   percent <- (1 - 1 / k^2) * 100
@@ -601,6 +628,12 @@ chebyshevRange <- function(mean_val, sd_val, k) {
 ###############################################################################
 
 percentileValue <- function(data, p) {
+  data <- require_numeric_vector(data, "Data")
+  p <- require_num(p, "Percentile")
+  if (p < 0 || p > 100) {
+    stop("Percentile must be between 0 and 100.")
+  }
+
   # p = percentile as a whole number, such as 50 for the 50th percentile
   
   value <- as.numeric(quantile(data, probs = p / 100, type = 7))
@@ -645,6 +678,12 @@ percentileValue <- function(data, p) {
 ###############################################################################
 
 corrReg <- function(x, y) {
+  x <- require_numeric_vector(x, "x", 2)
+  y <- require_numeric_vector(y, "y", 2)
+  if (length(x) != length(y)) {
+    stop("x and y must have the same length.")
+  }
+
   model <- lm(y ~ x)
   intercept <- coef(model)[1]
   slope <- coef(model)[2]
@@ -669,6 +708,13 @@ corrReg <- function(x, y) {
 ###############################################################################
 
 predictY <- function(x, y, new_x) {
+  x <- require_numeric_vector(x, "x", 2)
+  y <- require_numeric_vector(y, "y", 2)
+  if (length(x) != length(y)) {
+    stop("x and y must have the same length.")
+  }
+  new_x <- require_num(new_x, "New x")
+
   model <- lm(y ~ x)
   yhat <- predict(model, newdata = data.frame(x = new_x))
   
@@ -712,6 +758,12 @@ predictY <- function(x, y, new_x) {
 ###############################################################################
 
 simpleProb <- function(favorable, total) {
+  favorable <- require_nonnegative_num(favorable, "Favorable")
+  total <- require_positive_num(total, "Total")
+  if (favorable > total) {
+    stop("Favorable cannot be larger than total.")
+  }
+
   prob <- favorable / total
   
   cat("--------------------------------------------------\n")
@@ -731,8 +783,14 @@ simpleProb <- function(favorable, total) {
 
 complementProb <- function(prob_event = NULL, favorable = NULL, total = NULL) {
   if (is.null(prob_event)) {
+    favorable <- require_nonnegative_num(favorable, "Favorable")
+    total <- require_positive_num(total, "Total")
+    if (favorable > total) {
+      stop("Favorable cannot be larger than total.")
+    }
     prob_event <- favorable / total
   }
+  prob_event <- require_probability_num(prob_event, "Event probability")
   complement <- 1 - prob_event
   
   cat("--------------------------------------------------\n")
@@ -750,6 +808,12 @@ complementProb <- function(prob_event = NULL, favorable = NULL, total = NULL) {
 ###############################################################################
 
 conditionalProb <- function(joint_count, given_count) {
+  joint_count <- require_nonnegative_num(joint_count, "Joint count")
+  given_count <- require_positive_num(given_count, "Given count")
+  if (joint_count > given_count) {
+    stop("Joint count cannot be larger than given count.")
+  }
+
   prob <- joint_count / given_count
   
   cat("--------------------------------------------------\n")
@@ -771,7 +835,11 @@ tableProb <- function(table_data, row_name = NULL, col_name = NULL) {
   # row_name and col_name = optional row/column names for a joint probability
   
   table_data <- as.matrix(table_data)
-  total <- sum(table_data)
+  require_numeric_vector(table_data, "Table counts")
+  if (any(table_data < 0)) {
+    stop("Table counts must be nonnegative.")
+  }
+  total <- require_positive_num(sum(table_data), "Total")
   
   cat("--------------------------------------------------\n")
   cat("Two-Way Table Probability\n")
@@ -817,6 +885,12 @@ tableProb <- function(table_data, row_name = NULL, col_name = NULL) {
 ###############################################################################
 
 discreteDist <- function(x, prob) {
+  x <- require_numeric_vector(x, "x")
+  prob <- require_probability_vector(prob, "Probabilities")
+  if (length(x) != length(prob)) {
+    stop("x and probabilities must have the same length.")
+  }
+
   valid <- all(prob >= 0 & prob <= 1) && abs(sum(prob) - 1) < 0.000001
   expected <- sum(x * prob)
   variance <- sum((x - expected)^2 * prob)
@@ -838,6 +912,13 @@ discreteDist <- function(x, prob) {
 ###############################################################################
 
 probFromDist <- function(x, prob, type = "equal", value) {
+  x <- require_numeric_vector(x, "x")
+  prob <- require_probability_vector(prob, "Probabilities")
+  if (length(x) != length(prob)) {
+    stop("x and probabilities must have the same length.")
+  }
+  value <- require_num(value, "Value")
+
   # type = "equal", "less", "less_equal", "greater", "greater_equal"
   
   if (type == "equal") {
@@ -850,6 +931,8 @@ probFromDist <- function(x, prob, type = "equal", value) {
     ans <- sum(prob[x > value])
   } else if (type == "greater_equal") {
     ans <- sum(prob[x >= value])
+  } else {
+    stop("Unknown probability type.")
   }
   
   cat("--------------------------------------------------\n")
@@ -894,6 +977,15 @@ probFromDist <- function(x, prob, type = "equal", value) {
 ###############################################################################
 
 uniformDist <- function(a, b, lower = NULL, upper = NULL) {
+  a <- require_num(a, "a")
+  b <- require_num(b, "b")
+  if (a >= b) {
+    stop("a must be less than b.")
+  }
+  if (!is.null(lower) && !is.null(upper)) {
+    require_between_values(lower, upper)
+  }
+
   mean_val <- (a + b) / 2
   sd_val <- sqrt((b - a)^2 / 12)
   
@@ -916,6 +1008,10 @@ uniformDist <- function(a, b, lower = NULL, upper = NULL) {
 ###############################################################################
 
 zScore <- function(x, mean_val, sd_val) {
+  x <- require_num(x, "x")
+  mean_val <- require_num(mean_val, "Mean")
+  sd_val <- require_positive_num(sd_val, "Standard deviation")
+
   z <- (x - mean_val) / sd_val
   
   cat("--------------------------------------------------\n")
@@ -930,6 +1026,10 @@ zScore <- function(x, mean_val, sd_val) {
 ###############################################################################
 
 normalProb <- function(mean_val = 0, sd_val = 1, lower = -Inf, upper = Inf) {
+  mean_val <- require_num(mean_val, "Mean")
+  sd_val <- require_positive_num(sd_val, "Standard deviation")
+  require_between_values(lower, upper)
+
   prob <- pnorm(upper, mean_val, sd_val) - pnorm(lower, mean_val, sd_val)
   
   cat("--------------------------------------------------\n")
@@ -947,6 +1047,10 @@ normalProb <- function(mean_val = 0, sd_val = 1, lower = -Inf, upper = Inf) {
 ###############################################################################
 
 invNormal <- function(prob_left, mean_val = 0, sd_val = 1) {
+  prob_left <- require_probability_num(prob_left, "Area left", allow_zero_one = FALSE)
+  mean_val <- require_num(mean_val, "Mean")
+  sd_val <- require_positive_num(sd_val, "Standard deviation")
+
   value <- qnorm(prob_left, mean_val, sd_val)
   
   cat("--------------------------------------------------\n")
@@ -990,6 +1094,10 @@ invNormal <- function(prob_left, mean_val = 0, sd_val = 1) {
 ###############################################################################
 
 sampleMeanDist <- function(mu, sigma, n) {
+  mu <- require_num(mu, "Mean")
+  sigma <- require_positive_num(sigma, "sigma")
+  n <- require_whole_num(n, "n", 1)
+
   mean_xbar <- mu
   se <- sigma / sqrt(n)
   
@@ -1006,6 +1114,11 @@ sampleMeanDist <- function(mu, sigma, n) {
 ###############################################################################
 
 sampleMeanProb <- function(mu, sigma, n, lower = -Inf, upper = Inf) {
+  mu <- require_num(mu, "Mean")
+  sigma <- require_positive_num(sigma, "sigma")
+  n <- require_whole_num(n, "n", 1)
+  require_between_values(lower, upper)
+
   se <- sigma / sqrt(n)
   prob <- pnorm(upper, mu, se) - pnorm(lower, mu, se)
   
@@ -1023,6 +1136,9 @@ sampleMeanProb <- function(mu, sigma, n, lower = -Inf, upper = Inf) {
 ###############################################################################
 
 samplePropDist <- function(p, n) {
+  p <- require_probability_num(p, "Proportion")
+  n <- require_whole_num(n, "n", 1)
+
   mean_phat <- p
   se <- sqrt(p * (1 - p) / n)
   
@@ -1040,6 +1156,10 @@ samplePropDist <- function(p, n) {
 ###############################################################################
 
 samplePropProb <- function(p, n, lower = -Inf, upper = Inf) {
+  p <- require_probability_num(p, "Proportion")
+  n <- require_whole_num(n, "n", 1)
+  require_between_values(lower, upper)
+
   se <- sqrt(p * (1 - p) / n)
   prob <- pnorm(upper, p, se) - pnorm(lower, p, se)
   
@@ -2056,6 +2176,9 @@ print_chi_square_table_parts <- function(chi) {
 }
 
 chiSqCriticalValue <- function(df, alpha) {
+  df <- require_whole_num(df, "Degrees of freedom", 1)
+  alpha <- require_alpha(alpha)
+
   # df = degrees of freedom
   # alpha = significance level / area to the right
   
@@ -2434,6 +2557,13 @@ chiSqHomogeneity <- function(observed_table, alpha = 0.05,
 ###############################################################################
 
 expectedCellCount <- function(row_total, column_total, grand_total) {
+  row_total <- require_nonnegative_num(row_total, "Row total")
+  column_total <- require_nonnegative_num(column_total, "Column total")
+  grand_total <- require_positive_num(grand_total, "Grand total")
+  if (row_total > grand_total || column_total > grand_total) {
+    stop("Row and column totals cannot be larger than grand total.")
+  }
+
   # row_total = total for the row
   # column_total = total for the column
   # grand_total = total number of observations in the table
