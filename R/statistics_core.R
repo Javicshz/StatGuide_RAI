@@ -5,6 +5,154 @@
 
 
 ###############################################################################
+# SHARED INPUT VALIDATION
+# Every calculator below checks its inputs with these helpers and returns a
+# calculator_result (invisibly) after printing, so the console and the Shiny
+# app share one implementation.
+###############################################################################
+
+require_num <- function(value, label) {
+  if (is.null(value) || is.na(value)) {
+    stop(paste(label, "is required for this question type."))
+  }
+  value
+}
+
+require_numeric_vector <- function(values, label, min_length = 1) {
+  if (is.null(values) || length(values) < min_length || any(is.na(values))) {
+    stop(paste(label, "must contain at least", min_length, "numeric value(s)."))
+  }
+  values
+}
+
+require_probability_vector <- function(values, label, min_length = 1) {
+  values <- require_numeric_vector(values, label, min_length)
+  if (any(values < 0 | values > 1)) {
+    stop(paste(label, "must contain probabilities between 0 and 1."))
+  }
+  values
+}
+
+require_positive_num <- function(value, label) {
+  value <- require_num(value, label)
+  if (value <= 0) {
+    stop(paste(label, "must be greater than 0."))
+  }
+  value
+}
+
+require_nonnegative_num <- function(value, label) {
+  value <- require_num(value, label)
+  if (value < 0) {
+    stop(paste(label, "must be 0 or greater."))
+  }
+  value
+}
+
+require_whole_num <- function(value, label, min_value = 0) {
+  value <- require_num(value, label)
+  if (value != floor(value) || value < min_value) {
+    stop(paste(label, "must be a whole number at least", min_value, "."))
+  }
+  value
+}
+
+require_probability_num <- function(value, label, allow_zero_one = TRUE) {
+  value <- require_num(value, label)
+  if (allow_zero_one) {
+    invalid <- value < 0 || value > 1
+  } else {
+    invalid <- value <= 0 || value >= 1
+  }
+  if (invalid) {
+    boundary <- if (allow_zero_one) "between 0 and 1" else "greater than 0 and less than 1"
+    stop(paste(label, "must be", boundary, "."))
+  }
+  value
+}
+
+require_conf_level <- function(conf_level, label = "Confidence level") {
+  require_probability_num(conf_level, label, allow_zero_one = FALSE)
+}
+
+require_alpha <- function(alpha, label = "Alpha") {
+  require_probability_num(alpha, label, allow_zero_one = FALSE)
+}
+
+require_between_values <- function(lower, upper, lower_label = "Lower value", upper_label = "Upper value") {
+  lower <- require_num(lower, lower_label)
+  upper <- require_num(upper, upper_label)
+  if (lower > upper) {
+    stop(paste(lower_label, "must be less than or equal to", paste0(upper_label, ".")))
+  }
+  list(lower = lower, upper = upper)
+}
+
+calculator_result <- function(ok, output = "", message = "", status = NULL,
+                              values = list(), metadata = list()) {
+  structure(
+    list(
+      ok = isTRUE(ok),
+      output = if (is.null(output)) "" else output,
+      message = if (is.null(message)) "" else message,
+      status = if (!is.null(status)) status else if (isTRUE(ok)) "ok" else "error",
+      values = values,
+      metadata = metadata
+    ),
+    class = "calculator_result"
+  )
+}
+
+resolve_conf_alpha <- function(conf_level = NULL, alpha = NULL) {
+  if (is.null(conf_level) && is.null(alpha)) {
+    conf_level <- 0.95
+    alpha <- 0.05
+  } else if (is.null(conf_level)) {
+    alpha <- require_alpha(alpha)
+    conf_level <- 1 - alpha
+  } else if (is.null(alpha)) {
+    conf_level <- require_conf_level(conf_level)
+    alpha <- 1 - conf_level
+  } else {
+    conf_level <- require_conf_level(conf_level)
+    alpha <- require_alpha(alpha)
+  }
+  list(conf_level = conf_level, alpha = alpha)
+}
+
+validate_chisq_table <- function(observed_table) {
+  observed_table <- as.matrix(observed_table)
+  if (nrow(observed_table) < 2 || ncol(observed_table) < 2) {
+    stop("Chi-square table must have at least 2 rows and 2 columns.")
+  }
+  if (any(is.na(observed_table)) || any(observed_table < 0)) {
+    stop("Chi-square observed counts must be nonnegative numbers.")
+  }
+  if (sum(observed_table) <= 0) {
+    stop("Chi-square observed counts must have a positive grand total.")
+  }
+  observed_table
+}
+
+print_two_sample_ci_interpretation <- function(conf_level, lower, upper, digits = 2, subject = "") {
+  cat("CI Interpretation:\n")
+  if (lower > 0 && upper > 0) {
+    cat("We are", conf_level * 100, paste0("% confident that ", subject, "Population 1 is between"),
+        round(lower, digits), "and", round(upper, digits),
+        paste0("larger than ", subject, "Population 2.\n"))
+  } else if (lower < 0 && upper < 0) {
+    cat("We are", conf_level * 100, paste0("% confident that ", subject, "Population 1 is between"),
+        abs(round(upper, digits)), "and", abs(round(lower, digits)),
+        paste0("smaller than ", subject, "Population 2.\n"))
+  } else if (nzchar(subject)) {
+    cat("Since the confidence interval contains 0, there is not sufficient evidence that the two population means are different.\n")
+  } else {
+    cat("Since the interval contains 0, there is not sufficient evidence of a difference.\n")
+  }
+  cat("--------------------------------------------------\n")
+}
+
+###############################################################################
 # CHAPTER 1
 ###############################################################################
 
@@ -936,6 +1084,13 @@ samplePropProb <- function(p, n, lower = -Inf, upper = Inf) {
 ###############################################################################
 
 onePropCI <- function(x, n, conf_level = 0.95) {
+  x <- require_whole_num(x, "Successes x", 0)
+  n <- require_whole_num(n, "n", 1)
+  conf_level <- require_conf_level(conf_level)
+  if (x > n) {
+    stop("Successes x cannot be larger than n.")
+  }
+
   phat <- x / n
   alpha <- 1 - conf_level
   z <- qnorm(1 - alpha / 2)
@@ -943,7 +1098,7 @@ onePropCI <- function(x, n, conf_level = 0.95) {
   me <- z * se
   lower <- phat - me
   upper <- phat + me
-  
+
   cat("--------------------------------------------------\n")
   cat("One Proportion Confidence Interval\n")
   cat("--------------------------------------------------\n")
@@ -956,6 +1111,26 @@ onePropCI <- function(x, n, conf_level = 0.95) {
   cat(sprintf("%-25s: %9.6f%%\n", "Lower Endpoint (%)", lower * 100))
   cat(sprintf("%-25s: %9.6f%%\n", "Upper Endpoint (%)", upper * 100))
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      successes = x,
+      n = n,
+      estimate = phat,
+      percent = phat * 100,
+      confidence_level = conf_level,
+      alpha = alpha,
+      z_critical = z,
+      standard_error = se,
+      margin_error = me,
+      lower_endpoint = lower,
+      upper_endpoint = upper,
+      lower_percent = lower * 100,
+      upper_percent = upper * 100
+    ),
+    metadata = list(calculator = "onePropCI")
+  ))
 }
 
 ###############################################################################
@@ -963,13 +1138,18 @@ onePropCI <- function(x, n, conf_level = 0.95) {
 ###############################################################################
 
 meanKnownSigmaCI <- function(n, xbar, sigma, conf_level = 0.95) {
+  n <- require_whole_num(n, "n", 1)
+  xbar <- require_num(xbar, "xbar")
+  sigma <- require_positive_num(sigma, "sigma")
+  conf_level <- require_conf_level(conf_level)
+
   alpha <- 1 - conf_level
   z <- qnorm(1 - alpha / 2)
   se <- sigma / sqrt(n)
   me <- z * se
   lower <- xbar - me
   upper <- xbar + me
-  
+
   cat("--------------------------------------------------\n")
   cat("Mean CI (Known Sigma)\n")
   cat("--------------------------------------------------\n")
@@ -979,6 +1159,23 @@ meanKnownSigmaCI <- function(n, xbar, sigma, conf_level = 0.95) {
   cat(sprintf("%-25s: %10.6f\n", "Lower Endpoint", lower))
   cat(sprintf("%-25s: %10.6f\n", "Upper Endpoint", upper))
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n = n,
+      mean = xbar,
+      sigma = sigma,
+      confidence_level = conf_level,
+      alpha = alpha,
+      z_critical = z,
+      standard_error = se,
+      margin_error = me,
+      lower_endpoint = lower,
+      upper_endpoint = upper
+    ),
+    metadata = list(calculator = "meanKnownSigmaCI")
+  ))
 }
 
 ###############################################################################
@@ -986,6 +1183,11 @@ meanKnownSigmaCI <- function(n, xbar, sigma, conf_level = 0.95) {
 ###############################################################################
 
 meanTCI <- function(n, xbar, s, conf_level = 0.95) {
+  n <- require_whole_num(n, "n", 2)
+  xbar <- require_num(xbar, "xbar")
+  s <- require_positive_num(s, "s")
+  conf_level <- require_conf_level(conf_level)
+
   alpha <- 1 - conf_level
   df <- n - 1
   tcrit <- qt(1 - alpha / 2, df)
@@ -993,7 +1195,7 @@ meanTCI <- function(n, xbar, s, conf_level = 0.95) {
   me <- tcrit * se
   lower <- xbar - me
   upper <- xbar + me
-  
+
   cat("--------------------------------------------------\n")
   cat("Mean CI (Unknown Sigma / t)\n")
   cat("--------------------------------------------------\n")
@@ -1004,6 +1206,24 @@ meanTCI <- function(n, xbar, s, conf_level = 0.95) {
   cat(sprintf("%-25s: %10.6f\n", "Lower Endpoint", lower))
   cat(sprintf("%-25s: %10.6f\n", "Upper Endpoint", upper))
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n = n,
+      mean = xbar,
+      sample_sd = s,
+      confidence_level = conf_level,
+      alpha = alpha,
+      df = df,
+      t_critical = tcrit,
+      standard_error = se,
+      margin_error = me,
+      lower_endpoint = lower,
+      upper_endpoint = upper
+    ),
+    metadata = list(calculator = "meanTCI")
+  ))
 }
 
 ###############################################################################
@@ -1011,11 +1231,15 @@ meanTCI <- function(n, xbar, s, conf_level = 0.95) {
 ###############################################################################
 
 varianceCI <- function(n, s, conf_level = 0.95) {
+  n <- require_whole_num(n, "n", 2)
+  s <- require_nonnegative_num(s, "s")
+  conf_level <- require_conf_level(conf_level)
+
   alpha <- 1 - conf_level
   df <- n - 1
   lower_var <- df * s^2 / qchisq(1 - alpha / 2, df)
   upper_var <- df * s^2 / qchisq(alpha / 2, df)
-  
+
   cat("--------------------------------------------------\n")
   cat("Variance / Standard Deviation CI\n")
   cat("--------------------------------------------------\n")
@@ -1025,6 +1249,22 @@ varianceCI <- function(n, s, conf_level = 0.95) {
   cat(sprintf("%-25s: %10.6f\n", "SD Lower", sqrt(lower_var)))
   cat(sprintf("%-25s: %10.6f\n", "SD Upper", sqrt(upper_var)))
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n = n,
+      sample_sd = s,
+      confidence_level = conf_level,
+      alpha = alpha,
+      df = df,
+      variance_lower = lower_var,
+      variance_upper = upper_var,
+      sd_lower = sqrt(lower_var),
+      sd_upper = sqrt(upper_var)
+    ),
+    metadata = list(calculator = "varianceCI")
+  ))
 }
 
 ###############################################################################
@@ -1062,22 +1302,30 @@ varianceCI <- function(n, s, conf_level = 0.95) {
 
 meanKnownSigmaTest <- function(n, xbar, mu0, sigma, alpha = 0.05,
                                alternative = "two.sided") {
+  n <- require_whole_num(n, "n", 1)
+  xbar <- require_num(xbar, "xbar")
+  mu0 <- require_num(mu0, "Hypothesized mean")
+  sigma <- require_positive_num(sigma, "sigma")
+  alpha <- require_alpha(alpha)
+
   se <- sigma / sqrt(n)
   z <- (xbar - mu0) / se
-  
+
   if (alternative == "two.sided") {
     p_value <- 2 * pnorm(-abs(z))
     critical <- qnorm(1 - alpha / 2)
   } else if (alternative == "less") {
     p_value <- pnorm(z)
     critical <- qnorm(alpha)
-  } else {
+  } else if (alternative == "greater") {
     p_value <- 1 - pnorm(z)
     critical <- qnorm(1 - alpha)
+  } else {
+    stop("Unknown alternative.")
   }
-  
+
   decision <- ifelse(p_value < alpha, "Reject", "Fail to Reject")
-  
+
   cat("--------------------------------------------------\n")
   cat("One Mean z Test (Known Sigma)\n")
   cat("--------------------------------------------------\n")
@@ -1087,6 +1335,24 @@ meanKnownSigmaTest <- function(n, xbar, mu0, sigma, alpha = 0.05,
   cat(sprintf("%-25s: %10.6f\n", "P-value", p_value))
   cat(sprintf("%-25s: %s\n", "Decision", decision))
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n = n,
+      mean = xbar,
+      hypothesized_mean = mu0,
+      sigma = sigma,
+      alpha = alpha,
+      alternative = alternative,
+      standard_error = se,
+      critical_value = critical,
+      statistic = z,
+      p_value = p_value,
+      decision = decision
+    ),
+    metadata = list(calculator = "meanKnownSigmaTest")
+  ))
 }
 
 ###############################################################################
@@ -1095,23 +1361,31 @@ meanKnownSigmaTest <- function(n, xbar, mu0, sigma, alpha = 0.05,
 
 meanTTest <- function(n, xbar, mu0, s, alpha = 0.05,
                       alternative = "two.sided") {
+  n <- require_whole_num(n, "n", 2)
+  xbar <- require_num(xbar, "xbar")
+  mu0 <- require_num(mu0, "Hypothesized mean")
+  s <- require_positive_num(s, "s")
+  alpha <- require_alpha(alpha)
+
   df <- n - 1
   se <- s / sqrt(n)
   t_stat <- (xbar - mu0) / se
-  
+
   if (alternative == "two.sided") {
     p_value <- 2 * pt(-abs(t_stat), df)
     critical <- qt(1 - alpha / 2, df)
   } else if (alternative == "less") {
     p_value <- pt(t_stat, df)
     critical <- qt(alpha, df)
-  } else {
+  } else if (alternative == "greater") {
     p_value <- 1 - pt(t_stat, df)
     critical <- qt(1 - alpha, df)
+  } else {
+    stop("Unknown alternative.")
   }
-  
+
   decision <- ifelse(p_value < alpha, "Reject", "Fail to Reject")
-  
+
   cat("--------------------------------------------------\n")
   cat("One Mean t Test\n")
   cat("--------------------------------------------------\n")
@@ -1122,6 +1396,25 @@ meanTTest <- function(n, xbar, mu0, s, alpha = 0.05,
   cat(sprintf("%-25s: %10.6f\n", "P-value", p_value))
   cat(sprintf("%-25s: %s\n", "Decision", decision))
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n = n,
+      mean = xbar,
+      hypothesized_mean = mu0,
+      sample_sd = s,
+      alpha = alpha,
+      alternative = alternative,
+      df = df,
+      standard_error = se,
+      critical_value = critical,
+      statistic = t_stat,
+      p_value = p_value,
+      decision = decision
+    ),
+    metadata = list(calculator = "meanTTest")
+  ))
 }
 
 ###############################################################################
@@ -1130,23 +1423,33 @@ meanTTest <- function(n, xbar, mu0, s, alpha = 0.05,
 
 onePropTest <- function(x, n, p0, alpha = 0.05,
                         alternative = "two.sided") {
+  x <- require_whole_num(x, "Successes x", 0)
+  n <- require_whole_num(n, "n", 1)
+  p0 <- require_probability_num(p0, "Hypothesized proportion", allow_zero_one = FALSE)
+  alpha <- require_alpha(alpha)
+  if (x > n) {
+    stop("Successes x cannot be larger than n.")
+  }
+
   phat <- x / n
   se <- sqrt(p0 * (1 - p0) / n)
   z <- (phat - p0) / se
-  
+
   if (alternative == "two.sided") {
     p_value <- 2 * pnorm(-abs(z))
     critical <- qnorm(1 - alpha / 2)
   } else if (alternative == "less") {
     p_value <- pnorm(z)
     critical <- qnorm(alpha)
-  } else {
+  } else if (alternative == "greater") {
     p_value <- 1 - pnorm(z)
     critical <- qnorm(1 - alpha)
+  } else {
+    stop("Unknown alternative.")
   }
-  
+
   decision <- ifelse(p_value < alpha, "Reject", "Fail to Reject")
-  
+
   cat("--------------------------------------------------\n")
   cat("One Proportion z Test\n")
   cat("--------------------------------------------------\n")
@@ -1158,6 +1461,25 @@ onePropTest <- function(x, n, p0, alpha = 0.05,
   cat(sprintf("%-25s: %10.6f\n", "P-value", p_value))
   cat(sprintf("%-25s: %s\n", "Decision", decision))
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      successes = x,
+      n = n,
+      estimate = phat,
+      percent = phat * 100,
+      hypothesized_proportion = p0,
+      alpha = alpha,
+      alternative = alternative,
+      standard_error = se,
+      critical_value = critical,
+      statistic = z,
+      p_value = p_value,
+      decision = decision
+    ),
+    metadata = list(calculator = "onePropTest")
+  ))
 }
 
 ###############################################################################
@@ -1231,16 +1553,16 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2, conf_level = N
   # conf_level = confidence level
   # alpha = significance level
   # alternative = "two.sided", "less", or "greater"
-  if (is.null(conf_level) && !is.null(alpha)) {
-    conf_level <- 1 - alpha
-  }
-  if (!is.null(conf_level) && is.null(alpha)) {
-    alpha <- 1 - conf_level
-  }
-  if (is.null(alpha)) {
-    alpha <- 0.05
-    conf_level <- 0.95
-  }
+  n1 <- require_whole_num(n1, "n1", 1)
+  n2 <- require_whole_num(n2, "n2", 1)
+  x1 <- require_num(x1, "x1")
+  x2 <- require_num(x2, "x2")
+  sigma1 <- require_positive_num(sigma1, "sigma1")
+  sigma2 <- require_positive_num(sigma2, "sigma2")
+  levels <- resolve_conf_alpha(conf_level, alpha)
+  conf_level <- levels$conf_level
+  alpha <- levels$alpha
+
   diff_mean <- x1 - x2
   stnd_err <- sqrt((sigma1^2 / n1) + (sigma2^2 / n2))
   z_stat <- diff_mean / stnd_err
@@ -1253,6 +1575,8 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2, conf_level = N
   } else if (alternative == "greater") {
     z_critical <- qnorm(1 - alpha)
     p_value <- 1 - pnorm(z_stat)
+  } else {
+    stop("Unknown alternative.")
   }
   marg_err <- qnorm(1 - alpha / 2) * stnd_err
   lower <- diff_mean - marg_err
@@ -1287,24 +1611,33 @@ twoIndMeansKnownSigma <- function(n1, x1, sigma1, n2, x2, sigma2, conf_level = N
   cat("--------------------------------------------------\n")
   cat(sprintf("%-25s: %s (%s)\n", "Decision", decision, evidence))
   cat("--------------------------------------------------\n")
-  if (!is.null(conf_level)) {
-    if (lower > 0 && upper > 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          round(lower, 2), "and", round(upper, 2),
-          "larger than Population 2.\n")
-    } else if (lower < 0 && upper < 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          abs(round(upper, 2)), "and", abs(round(lower, 2)),
-          "smaller than Population 2.\n")
-    } else {
-      cat("CI Interpretation:\n")
-      cat("Since the interval contains 0, there is not sufficient evidence of a difference.\n")
-    }
-    
-    cat("--------------------------------------------------\n")
-  }
+  print_two_sample_ci_interpretation(conf_level, lower, upper, digits = 2)
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n1 = n1,
+      n2 = n2,
+      mean1 = x1,
+      mean2 = x2,
+      sigma1 = sigma1,
+      sigma2 = sigma2,
+      confidence_level = conf_level,
+      alpha = alpha,
+      alternative = alternative,
+      difference = diff_mean,
+      standard_error = stnd_err,
+      critical_value = z_critical,
+      statistic = z_stat,
+      p_value = p_value,
+      margin_error = marg_err,
+      lower_endpoint = lower,
+      upper_endpoint = upper,
+      decision = decision,
+      evidence = evidence
+    ),
+    metadata = list(calculator = "twoIndMeansKnownSigma")
+  ))
 }
 
 ###############################################################################
@@ -1321,27 +1654,24 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
   # x2 = sample mean for population 2
   # s2 = sample standard deviation for population 2
   # alternative = "two.sided", "less", or "greater"
-  
-  if (is.null(conf_level) && !is.null(alpha)) {
-    conf_level <- 1 - alpha
-  }
-  
-  if (!is.null(conf_level) && is.null(alpha)) {
-    alpha <- 1 - conf_level
-  }
-  if (is.null(alpha)) {
-    alpha <- 0.05
-    conf_level <- 0.95
-  }
-  
+  n1 <- require_whole_num(n1, "n1", 2)
+  n2 <- require_whole_num(n2, "n2", 2)
+  x1 <- require_num(x1, "x1")
+  x2 <- require_num(x2, "x2")
+  s1 <- require_positive_num(s1, "s1")
+  s2 <- require_positive_num(s2, "s2")
+  levels <- resolve_conf_alpha(conf_level, alpha)
+  conf_level <- levels$conf_level
+  alpha <- levels$alpha
+
   diff_mean <- x1 - x2
   stnd_err <- sqrt((s1^2 / n1) + (s2^2 / n2))
   t_stat <- diff_mean / stnd_err
-  
+
   df_num <- ((s1^2 / n1) + (s2^2 / n2))^2
   df_den <- (((s1^2 / n1)^2) / (n1 - 1)) + (((s2^2 / n2)^2) / (n2 - 1))
   df <- df_num / df_den
-  
+
   if (alternative == "two.sided") {
     t_critical <- qt(1 - alpha / 2, df)
     p_value <- 2 * pt(-abs(t_stat), df)
@@ -1351,12 +1681,14 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
   } else if (alternative == "greater") {
     t_critical <- qt(1 - alpha, df)
     p_value <- 1 - pt(t_stat, df)
+  } else {
+    stop("Unknown alternative.")
   }
-  
+
   marg_err <- qt(1 - alpha / 2, df) * stnd_err
   lower <- diff_mean - marg_err
   upper <- diff_mean + marg_err
-  
+
   if (p_value < alpha) {
     decision <- "Reject"
     evidence <- "sufficient evidence"
@@ -1364,11 +1696,11 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
     decision <- "Fail to Reject"
     evidence <- "insufficient evidence"
   }
-  
+
   cat("--------------------------------------------------\n")
   cat("Two Independent Means (Unequal Variances)\n")
   cat("--------------------------------------------------\n")
-  
+
   cat("H0: mu1 - mu2 = 0\n")
   if (alternative == "two.sided") {
     cat("Ha: mu1 - mu2 != 0\n")
@@ -1377,43 +1709,56 @@ twoIndMeanUneqVar <- function(n1, x1, s1, n2, x2, s2,
   } else {
     cat("Ha: mu1 - mu2 > 0\n")
   }
-  
+
   cat("--------------------------------------------------\n")
-  
+
   cat(sprintf("%-25s: %10.6f\n", "Difference in Means", diff_mean))
   cat(sprintf("%-25s: %10.6f\n", "Standard Error", stnd_err))
   cat(sprintf("%-25s: %10.6f\n", "Degrees of Freedom", df))
   cat(sprintf("%-25s: %10.6f\n", "t Critical", t_critical))
   cat(sprintf("%-25s: %10.6f\n", "Test Statistic", t_stat))
   cat(sprintf("%-25s: %10.6f\n", "P-value", p_value))
-  
+
   cat("--------------------------------------------------\n")
-  
+
   cat(sprintf("%-25s: %10.6f\n", "Margin of Error", marg_err))
   cat(sprintf("%-25s: %10.6f\n", "Lower Endpoint", lower))
   cat(sprintf("%-25s: %10.6f\n", "Upper Endpoint", upper))
-  
+
   cat("--------------------------------------------------\n")
-  
+
   cat(sprintf("%-25s: %s (%s)\n", "Decision", decision, evidence))
   cat("--------------------------------------------------\n")
-  if (lower > 0 && upper > 0) {
-    cat("CI Interpretation:\n")
-    cat("We are", conf_level * 100, "% confident that the mean for Population 1 is between",
-        round(lower, 2), "and", round(upper, 2),
-        "larger than the mean for Population 2.\n")
-  } else if (lower < 0 && upper < 0) {
-    cat("CI Interpretation:\n")
-    cat("We are", conf_level * 100, "% confident that the mean for Population 1 is between",
-        abs(round(upper, 2)), "and", abs(round(lower, 2)),
-        "smaller than the mean for Population 2.\n")
-  } else {
-    cat("CI Interpretation:\n")
-    cat("Since the confidence interval contains 0, there is not sufficient evidence that the two population means are different.\n")
-  }
-  
-  cat("--------------------------------------------------\n")
+  print_two_sample_ci_interpretation(conf_level, lower, upper, digits = 2, subject = "the mean for ")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n1 = n1,
+      n2 = n2,
+      mean1 = x1,
+      mean2 = x2,
+      sample_sd1 = s1,
+      sample_sd2 = s2,
+      confidence_level = conf_level,
+      alpha = alpha,
+      alternative = alternative,
+      difference = diff_mean,
+      standard_error = stnd_err,
+      df = df,
+      critical_value = t_critical,
+      statistic = t_stat,
+      p_value = p_value,
+      margin_error = marg_err,
+      lower_endpoint = lower,
+      upper_endpoint = upper,
+      decision = decision,
+      evidence = evidence
+    ),
+    metadata = list(calculator = "twoIndMeanUneqVar")
+  ))
 }
+
 ###############################################################################
 # Two Independent Means Equal Variances
 ###############################################################################
@@ -1430,26 +1775,23 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
   # conf_level = confidence level
   # alpha = significance level
   # alternative = "two.sided", "less", or "greater"
-  
-  if (is.null(conf_level) && !is.null(alpha)) {
-    conf_level <- 1 - alpha
-  }
-  
-  if (!is.null(conf_level) && is.null(alpha)) {
-    alpha <- 1 - conf_level
-  }
-  if (is.null(alpha)) {
-    alpha <- 0.05
-    conf_level <- 0.95
-  }
-  
+  n1 <- require_whole_num(n1, "n1", 2)
+  n2 <- require_whole_num(n2, "n2", 2)
+  x1 <- require_num(x1, "x1")
+  x2 <- require_num(x2, "x2")
+  s1 <- require_positive_num(s1, "s1")
+  s2 <- require_positive_num(s2, "s2")
+  levels <- resolve_conf_alpha(conf_level, alpha)
+  conf_level <- levels$conf_level
+  alpha <- levels$alpha
+
   diff_mean <- x1 - x2
-  
+
   sp2 <- (((n1 - 1) * s1^2) + ((n2 - 1) * s2^2)) / (n1 + n2 - 2)
   stnd_err <- sqrt(sp2 * (1 / n1 + 1 / n2))
   df <- n1 + n2 - 2
   t_stat <- diff_mean / stnd_err
-  
+
   if (alternative == "two.sided") {
     t_critical <- qt(1 - alpha / 2, df)
     p_value <- 2 * pt(-abs(t_stat), df)
@@ -1459,12 +1801,14 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
   } else if (alternative == "greater") {
     t_critical <- qt(1 - alpha, df)
     p_value <- 1 - pt(t_stat, df)
+  } else {
+    stop("Unknown alternative.")
   }
-  
+
   marg_err <- qt(1 - alpha / 2, df) * stnd_err
   lower <- diff_mean - marg_err
   upper <- diff_mean + marg_err
-  
+
   if (p_value < alpha) {
     decision <- "Reject"
     evidence <- "sufficient evidence"
@@ -1472,11 +1816,11 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
     decision <- "Fail to Reject"
     evidence <- "insufficient evidence"
   }
-  
+
   cat("--------------------------------------------------\n")
   cat("Two Independent Means (Equal Variances)\n")
   cat("--------------------------------------------------\n")
-  
+
   cat("H0: mu1 - mu2 = 0\n")
   if (alternative == "two.sided") {
     cat("Ha: mu1 - mu2 != 0\n")
@@ -1485,9 +1829,9 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
   } else {
     cat("Ha: mu1 - mu2 > 0\n")
   }
-  
+
   cat("--------------------------------------------------\n")
-  
+
   cat(sprintf("%-25s: %10.6f\n", "Difference in Means", diff_mean))
   cat(sprintf("%-25s: %10.6f\n", "Pooled Variance", sp2))
   cat(sprintf("%-25s: %10.6f\n", "Standard Error", stnd_err))
@@ -1495,35 +1839,46 @@ twoIndMeansEqVar <- function(n1, x1, s1, n2, x2, s2,
   cat(sprintf("%-25s: %10.6f\n", "t Critical", t_critical))
   cat(sprintf("%-25s: %10.6f\n", "Test Statistic", t_stat))
   cat(sprintf("%-25s: %10.6f\n", "P-value", p_value))
-  
+
   cat("--------------------------------------------------\n")
-  
+
   cat(sprintf("%-25s: %10.6f\n", "Margin of Error", marg_err))
   cat(sprintf("%-25s: %10.6f\n", "Lower Endpoint", lower))
   cat(sprintf("%-25s: %10.6f\n", "Upper Endpoint", upper))
-  
+
   cat("--------------------------------------------------\n")
-  
+
   cat(sprintf("%-25s: %s (%s)\n", "Decision", decision, evidence))
   cat("--------------------------------------------------\n")
-  if (!is.null(conf_level)) {
-    if (lower > 0 && upper > 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          round(lower, 2), "and", round(upper, 2),
-          "larger than Population 2.\n")
-    } else if (lower < 0 && upper < 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          abs(round(upper, 2)), "and", abs(round(lower, 2)),
-          "smaller than Population 2.\n")
-    } else {
-      cat("CI Interpretation:\n")
-      cat("Since the interval contains 0, there is not sufficient evidence of a difference.\n")
-    }
-    
-    cat("--------------------------------------------------\n")
-  }
+  print_two_sample_ci_interpretation(conf_level, lower, upper, digits = 2)
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      n1 = n1,
+      n2 = n2,
+      mean1 = x1,
+      mean2 = x2,
+      sample_sd1 = s1,
+      sample_sd2 = s2,
+      confidence_level = conf_level,
+      alpha = alpha,
+      alternative = alternative,
+      difference = diff_mean,
+      pooled_variance = sp2,
+      standard_error = stnd_err,
+      df = df,
+      critical_value = t_critical,
+      statistic = t_stat,
+      p_value = p_value,
+      margin_error = marg_err,
+      lower_endpoint = lower,
+      upper_endpoint = upper,
+      decision = decision,
+      evidence = evidence
+    ),
+    metadata = list(calculator = "twoIndMeansEqVar")
+  ))
 }
 
 ################################################################################
@@ -1650,6 +2005,56 @@ printBarTable <- function(table_data, digits = 6) {
 # Chi-Square Critical Value
 ###############################################################################
 
+chi_square_table_parts <- function(observed_table, alpha) {
+  row_totals <- rowSums(observed_table)
+  col_totals <- colSums(observed_table)
+  grand_total <- sum(observed_table)
+  expected_table <- outer(row_totals, col_totals) / grand_total
+  if (any(expected_table <= 0)) {
+    stop("Expected counts must be greater than 0 for a chi-square test.")
+  }
+  chi_components <- (observed_table - expected_table)^2 / expected_table
+  statistic <- sum(chi_components)
+  df <- (nrow(observed_table) - 1) * (ncol(observed_table) - 1)
+  p_value <- 1 - pchisq(statistic, df)
+  list(
+    observed_table = observed_table,
+    expected_table = expected_table,
+    chi_components = chi_components,
+    row_totals = row_totals,
+    col_totals = col_totals,
+    grand_total = grand_total,
+    df = df,
+    critical_value = qchisq(1 - alpha, df),
+    statistic = statistic,
+    p_value = p_value,
+    alpha = alpha,
+    decision = ifelse(p_value < alpha, "Reject", "Fail to Reject"),
+    evidence = ifelse(p_value < alpha, "sufficient evidence", "insufficient evidence")
+  )
+}
+
+print_chi_square_table_parts <- function(chi) {
+  cat("--------------------------------------------------\n")
+  cat("Observed Counts:\n")
+  printBarTable(chi$observed_table, digits = 6)
+  cat("--------------------------------------------------\n")
+  cat("Expected Values:\n")
+  printBarTable(chi$expected_table, digits = 6)
+  cat("--------------------------------------------------\n")
+  cat("Chi-Square Components:\n")
+  printBarTable(chi$chi_components, digits = 6)
+  cat("--------------------------------------------------\n")
+  cat(sprintf("%-25s: %10.6f\n", "Grand Total", chi$grand_total))
+  cat(sprintf("%-25s: %10.6f\n", "Degrees of Freedom", chi$df))
+  cat(sprintf("%-25s: %10.6f\n", "Chi-Square Critical", chi$critical_value))
+  cat(sprintf("%-25s: %10.6f\n", "Test Statistic", chi$statistic))
+  cat(sprintf("%-25s: %10.6f\n", "P-value", chi$p_value))
+  cat("--------------------------------------------------\n")
+  cat(sprintf("%-25s: %s (%s)\n", "Decision", chi$decision, chi$evidence))
+  cat("--------------------------------------------------\n")
+}
+
 chiSqCriticalValue <- function(df, alpha) {
   # df = degrees of freedom
   # alpha = significance level / area to the right
@@ -1682,34 +2087,42 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
   # conf_level = confidence level
   # alpha = significance level
   # alternative = "two.sided", "less", or "greater"
-  
+
   if (!is.null(data1)) {
+    data1 <- require_numeric_vector(data1, "Sample 1 data")
     x1 <- sum(data1)
     n1 <- length(data1)
   }
   if (!is.null(data2)) {
+    data2 <- require_numeric_vector(data2, "Sample 2 data")
     x2 <- sum(data2)
     n2 <- length(data2)
   }
-  if (is.null(conf_level) && !is.null(alpha)) {
-    conf_level <- 1 - alpha
+  x1 <- require_whole_num(x1, "Successes x1", 0)
+  n1 <- require_whole_num(n1, "n1", 1)
+  x2 <- require_whole_num(x2, "Successes x2", 0)
+  n2 <- require_whole_num(n2, "n2", 1)
+  if (x1 > n1) {
+    stop("Successes x1 cannot be larger than n1.")
   }
-  if (!is.null(conf_level) && is.null(alpha)) {
-    alpha <- 1 - conf_level
+  if (x2 > n2) {
+    stop("Successes x2 cannot be larger than n2.")
   }
-  if (is.null(alpha)) {
-    alpha <- 0.05
-    conf_level <- 0.95
-  }
-  
+  levels <- resolve_conf_alpha(conf_level, alpha)
+  conf_level <- levels$conf_level
+  alpha <- levels$alpha
+
   phat_1 <- x1 / n1
   phat_2 <- x2 / n2
   diff_phat <- phat_1 - phat_2
   stnd_err <- sqrt((phat_1 * (1 - phat_1) / n1) + (phat_2 * (1 - phat_2) / n2))
   pooled_phat <- (x1 + x2) / (n1 + n2)
   test_stnd_err <- sqrt(pooled_phat * (1 - pooled_phat) * (1 / n1 + 1 / n2))
+  if (test_stnd_err <= 0) {
+    stop("Standard error for the two-proportion test is 0. Check successes and sample sizes.")
+  }
   z_stat <- diff_phat / test_stnd_err
-  
+
   if (alternative == "two.sided") {
     z_critical <- qnorm(1 - alpha / 2)
     p_value <- 2 * pnorm(-abs(z_stat))
@@ -1719,12 +2132,14 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
   } else if (alternative == "greater") {
     z_critical <- qnorm(1 - alpha)
     p_value <- 1 - pnorm(z_stat)
+  } else {
+    stop("Unknown alternative.")
   }
-  
+
   marg_err <- qnorm(1 - alpha / 2) * stnd_err
   lower <- diff_phat - marg_err
   upper <- diff_phat + marg_err
-  
+
   if (p_value < alpha) {
     decision <- "Reject"
     evidence <- "sufficient evidence"
@@ -1732,7 +2147,7 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
     decision <- "Fail to Reject"
     evidence <- "insufficient evidence"
   }
-  
+
   cat("--------------------------------------------------\n")
   cat("Two Independent Sample Proportions\n")
   cat("--------------------------------------------------\n")
@@ -1772,25 +2187,35 @@ twoIndSampleProp <- function(x1 = NULL, n1 = NULL, x2 = NULL, n2 = NULL,
   cat("--------------------------------------------------\n")
   cat(sprintf("%-28s: %s (%s)\n", "Decision", decision, evidence))
   cat("--------------------------------------------------\n")
-  
-  if (!is.null(conf_level)) {
-    if (lower > 0 && upper > 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          round(lower, 4), "and", round(upper, 4),
-          "larger than Population 2.\n")
-    } else if (lower < 0 && upper < 0) {
-      cat("CI Interpretation:\n")
-      cat("We are", conf_level * 100, "% confident that Population 1 is between",
-          abs(round(upper, 4)), "and", abs(round(lower, 4)),
-          "smaller than Population 2.\n")
-    } else {
-      cat("CI Interpretation:\n")
-      cat("Since the interval contains 0, there is not sufficient evidence of a difference.\n")
-    }
-    
-    cat("--------------------------------------------------\n")
-  }
+  print_two_sample_ci_interpretation(conf_level, lower, upper, digits = 4)
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      successes1 = x1,
+      n1 = n1,
+      estimate1 = phat_1,
+      successes2 = x2,
+      n2 = n2,
+      estimate2 = phat_2,
+      difference = diff_phat,
+      confidence_level = conf_level,
+      alpha = alpha,
+      alternative = alternative,
+      standard_error_ci = stnd_err,
+      critical_value = z_critical,
+      margin_error = marg_err,
+      lower_endpoint = lower,
+      upper_endpoint = upper,
+      pooled_proportion = pooled_phat,
+      standard_error_test = test_stnd_err,
+      statistic = z_stat,
+      p_value = p_value,
+      decision = decision,
+      evidence = evidence
+    ),
+    metadata = list(calculator = "twoIndSampleProp")
+  ))
 }
 
 ###############################################################################
@@ -1806,26 +2231,55 @@ chiSqGoodnessFit <- function(observed, expected_probs = NULL, expected_counts = 
   # alpha = significance level
   # categories = optional category names
   # claim = wording used for the conclusion
-  
+
+  observed <- require_numeric_vector(observed, "Observed counts", 2)
+  alpha <- require_alpha(alpha)
+  if (any(observed < 0)) {
+    stop("Observed counts must be nonnegative.")
+  }
+  if (sum(observed) <= 0) {
+    stop("Observed counts must have a positive total.")
+  }
   if (is.null(categories)) {
     categories <- paste("Category", seq_along(observed))
+  } else if (length(categories) != length(observed)) {
+    stop("Category labels must match the number of observed counts.")
   }
-  
+
   if (is.null(expected_counts)) {
     if (is.null(expected_probs)) {
       expected_probs <- rep(1 / length(observed), length(observed))
+    } else {
+      expected_probs <- require_probability_vector(expected_probs, "Expected probabilities", length(observed))
+      if (length(expected_probs) != length(observed)) {
+        stop("Expected probabilities must match the number of observed counts.")
+      }
+      if (!isTRUE(all.equal(sum(expected_probs), 1, tolerance = 1e-6))) {
+        stop("Expected probabilities must add to 1.")
+      }
     }
-    expected_counts <- sum(observed) * expected_probs
   } else {
+    expected_counts <- require_numeric_vector(expected_counts, "Expected counts", length(observed))
+    if (length(expected_counts) != length(observed)) {
+      stop("Expected counts must match the number of observed counts.")
+    }
+    if (any(expected_counts <= 0)) {
+      stop("Expected counts must be greater than 0.")
+    }
     expected_probs <- expected_counts / sum(expected_counts)
   }
-  
+  # Scale to the observed total so given expected counts always match it.
+  expected_counts <- sum(observed) * expected_probs
+  if (any(expected_counts <= 0)) {
+    stop("Expected counts must be greater than 0.")
+  }
+
   chi_components <- (observed - expected_counts)^2 / expected_counts
   test_stat <- sum(chi_components)
   df <- length(observed) - 1
   critical_value <- qchisq(1 - alpha, df)
   p_value <- 1 - pchisq(test_stat, df)
-  
+
   if (p_value < alpha) {
     decision <- "Reject"
     evidence <- "sufficient evidence"
@@ -1833,16 +2287,16 @@ chiSqGoodnessFit <- function(observed, expected_probs = NULL, expected_counts = 
     decision <- "Fail to Reject"
     evidence <- "insufficient evidence"
   }
-  
+
   cat("--------------------------------------------------\n")
   cat("Chi-Square Goodness of Fit Test\n")
   cat("--------------------------------------------------\n")
   cat("H0:", claim, "is true.\n")
   cat("Ha:", claim, "is false.\n")
   cat("--------------------------------------------------\n")
-  
+
   category_labels <- substr(categories, 1, 12)
-  
+
   cat(sprintf("%-12s | %10s | %10s | %10s | %10s\n",
               "Category", "Obs", "ExpProp", "ExpValue", "ChiPart"))
   cat(paste(rep("-", 68), collapse = ""), "\n", sep = "")
@@ -1860,7 +2314,7 @@ chiSqGoodnessFit <- function(observed, expected_probs = NULL, expected_counts = 
   cat("--------------------------------------------------\n")
   cat(sprintf("%-25s: %s (%s)\n", "Decision", decision, evidence))
   cat("--------------------------------------------------\n")
-  
+
   if (decision == "Reject") {
     cat("Interpretation:\n")
     cat("There is sufficient evidence to conclude that", claim, "is false.\n")
@@ -1869,6 +2323,26 @@ chiSqGoodnessFit <- function(observed, expected_probs = NULL, expected_counts = 
     cat("There is not sufficient evidence to conclude that", claim, "is false.\n")
   }
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = list(
+      observed = observed,
+      expected_probs = expected_probs,
+      expected_counts = expected_counts,
+      chi_components = chi_components,
+      sample_size = sum(observed),
+      df = df,
+      critical_value = critical_value,
+      statistic = test_stat,
+      p_value = p_value,
+      alpha = alpha,
+      decision = decision,
+      evidence = evidence,
+      categories = categories
+    ),
+    metadata = list(calculator = "chiSqGoodnessFit", claim = claim)
+  ))
 }
 
 ###############################################################################
@@ -1882,53 +2356,19 @@ chiSqIndependence <- function(observed_table, alpha = 0.05,
   # alpha = significance level
   # row_var = name of the row variable
   # col_var = name of the column variable
-  
-  observed_table <- as.matrix(observed_table)
-  
-  row_totals <- rowSums(observed_table)
-  col_totals <- colSums(observed_table)
-  grand_total <- sum(observed_table)
-  
-  expected_table <- outer(row_totals, col_totals) / grand_total
-  chi_components <- (observed_table - expected_table)^2 / expected_table
-  test_stat <- sum(chi_components)
-  df <- (nrow(observed_table) - 1) * (ncol(observed_table) - 1)
-  critical_value <- qchisq(1 - alpha, df)
-  p_value <- 1 - pchisq(test_stat, df)
-  
-  if (p_value < alpha) {
-    decision <- "Reject"
-    evidence <- "sufficient evidence"
-  } else {
-    decision <- "Fail to Reject"
-    evidence <- "insufficient evidence"
-  }
-  
+
+  observed_table <- validate_chisq_table(observed_table)
+  alpha <- require_alpha(alpha)
+  chi <- chi_square_table_parts(observed_table, alpha)
+
   cat("--------------------------------------------------\n")
   cat("Chi-Square Test of Independence\n")
   cat("--------------------------------------------------\n")
   cat("H0:", row_var, "and", col_var, "are independent.\n")
   cat("Ha:", row_var, "and", col_var, "are dependent / associated.\n")
-  cat("--------------------------------------------------\n")
-  cat("Observed Counts:\n")
-  printBarTable(observed_table, digits = 6)
-  cat("--------------------------------------------------\n")
-  cat("Expected Values:\n")
-  printBarTable(expected_table, digits = 6)
-  cat("--------------------------------------------------\n")
-  cat("Chi-Square Components:\n")
-  printBarTable(chi_components, digits = 6)
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-25s: %10.6f\n", "Grand Total", grand_total))
-  cat(sprintf("%-25s: %10.6f\n", "Degrees of Freedom", df))
-  cat(sprintf("%-25s: %10.6f\n", "Chi-Square Critical", critical_value))
-  cat(sprintf("%-25s: %10.6f\n", "Test Statistic", test_stat))
-  cat(sprintf("%-25s: %10.6f\n", "P-value", p_value))
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-25s: %s (%s)\n", "Decision", decision, evidence))
-  cat("--------------------------------------------------\n")
-  
-  if (decision == "Reject") {
+  print_chi_square_table_parts(chi)
+
+  if (chi$decision == "Reject") {
     cat("Interpretation:\n")
     cat(sprintf("There is sufficient evidence to conclude that there is an association between %s and %s.\n",
                 row_var, col_var))
@@ -1938,6 +2378,12 @@ chiSqIndependence <- function(observed_table, alpha = 0.05,
                 row_var, col_var))
   }
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = chi,
+    metadata = list(calculator = "chiSqIndependence", row_var = row_var, col_var = col_var)
+  ))
 }
 
 ###############################################################################
@@ -1951,28 +2397,11 @@ chiSqHomogeneity <- function(observed_table, alpha = 0.05,
   # alpha = significance level
   # populations = name of the groups/populations being compared
   # response = name of the response categories
-  
-  observed_table <- as.matrix(observed_table)
-  
-  row_totals <- rowSums(observed_table)
-  col_totals <- colSums(observed_table)
-  grand_total <- sum(observed_table)
-  
-  expected_table <- outer(row_totals, col_totals) / grand_total
-  chi_components <- (observed_table - expected_table)^2 / expected_table
-  test_stat <- sum(chi_components)
-  df <- (nrow(observed_table) - 1) * (ncol(observed_table) - 1)
-  critical_value <- qchisq(1 - alpha, df)
-  p_value <- 1 - pchisq(test_stat, df)
-  
-  if (p_value < alpha) {
-    decision <- "Reject"
-    evidence <- "sufficient evidence"
-  } else {
-    decision <- "Fail to Reject"
-    evidence <- "insufficient evidence"
-  }
-  
+
+  observed_table <- validate_chisq_table(observed_table)
+  alpha <- require_alpha(alpha)
+  chi <- chi_square_table_parts(observed_table, alpha)
+
   cat("--------------------------------------------------\n")
   cat("Chi-Square Test of Homogeneity\n")
   cat("--------------------------------------------------\n")
@@ -1980,26 +2409,9 @@ chiSqHomogeneity <- function(observed_table, alpha = 0.05,
               response, populations))
   cat(sprintf("Ha: The distribution of %s is not the same for all %s.\n",
               response, populations))
-  cat("--------------------------------------------------\n")
-  cat("Observed Counts:\n")
-  printBarTable(observed_table, digits = 6)
-  cat("--------------------------------------------------\n")
-  cat("Expected Values:\n")
-  printBarTable(expected_table, digits = 6)
-  cat("--------------------------------------------------\n")
-  cat("Chi-Square Components:\n")
-  printBarTable(chi_components, digits = 6)
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-25s: %10.6f\n", "Grand Total", grand_total))
-  cat(sprintf("%-25s: %10.6f\n", "Degrees of Freedom", df))
-  cat(sprintf("%-25s: %10.6f\n", "Chi-Square Critical", critical_value))
-  cat(sprintf("%-25s: %10.6f\n", "Test Statistic", test_stat))
-  cat(sprintf("%-25s: %10.6f\n", "P-value", p_value))
-  cat("--------------------------------------------------\n")
-  cat(sprintf("%-25s: %s (%s)\n", "Decision", decision, evidence))
-  cat("--------------------------------------------------\n")
-  
-  if (decision == "Reject") {
+  print_chi_square_table_parts(chi)
+
+  if (chi$decision == "Reject") {
     cat("Interpretation:\n")
     cat(sprintf("There is sufficient evidence to conclude that the distribution of %s is not the same for all %s.\n",
                 response, populations))
@@ -2009,6 +2421,12 @@ chiSqHomogeneity <- function(observed_table, alpha = 0.05,
                 response, populations))
   }
   cat("--------------------------------------------------\n")
+
+  invisible(calculator_result(
+    TRUE,
+    values = chi,
+    metadata = list(calculator = "chiSqHomogeneity", populations = populations, response = response)
+  ))
 }
 
 ###############################################################################

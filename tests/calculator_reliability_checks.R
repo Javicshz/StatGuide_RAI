@@ -168,55 +168,55 @@ two_var_p <- min(2 * min(pf(f_stat, 11, 9), 1 - pf(f_stat, 11, 9)), 1)
 check("two variance structured statistic", isTRUE(all.equal(two_var_result$values$statistic, f_stat)))
 check("two variance structured p value", isTRUE(all.equal(two_var_result$values$p_value, two_var_p)))
 
-one_prop_result <- env$capture_calculator_result(env$onePropCI(40, 100, 0.95))
+one_prop_result <- env$capture_calculator_result(onePropCI(40, 100, 0.95))
 one_prop_phat <- 0.4
 one_prop_me <- qnorm(0.975) * sqrt(one_prop_phat * (1 - one_prop_phat) / 100)
 check("one proportion CI structured lower", isTRUE(all.equal(one_prop_result$values$lower_endpoint, one_prop_phat - one_prop_me)))
 check("one proportion CI preserves legacy text", grepl("One Proportion Confidence Interval", one_prop_result$output, fixed = TRUE))
 
-mean_known_result <- env$capture_calculator_result(env$meanKnownSigmaCI(25, 10, 2, 0.95))
+mean_known_result <- env$capture_calculator_result(meanKnownSigmaCI(25, 10, 2, 0.95))
 mean_known_me <- qnorm(0.975) * 2 / sqrt(25)
 check("mean known sigma CI structured lower", isTRUE(all.equal(mean_known_result$values$lower_endpoint, 10 - mean_known_me)))
 check("mean known sigma CI structured upper", isTRUE(all.equal(mean_known_result$values$upper_endpoint, 10 + mean_known_me)))
 
-mean_t_result <- env$capture_calculator_result(env$meanTCI(16, 20, 4, 0.95))
+mean_t_result <- env$capture_calculator_result(meanTCI(16, 20, 4, 0.95))
 mean_t_me <- qt(0.975, 15) * 4 / sqrt(16)
 check("mean t CI structured lower", isTRUE(all.equal(mean_t_result$values$lower_endpoint, 20 - mean_t_me)))
 check("mean t CI structured df", identical(mean_t_result$values$df, 15))
 
-variance_ci_result <- env$capture_calculator_result(env$varianceCI(12, 3, 0.95))
+variance_ci_result <- env$capture_calculator_result(varianceCI(12, 3, 0.95))
 variance_lower <- 11 * 3^2 / qchisq(0.975, 11)
 variance_upper <- 11 * 3^2 / qchisq(0.025, 11)
 check("variance CI structured lower", isTRUE(all.equal(variance_ci_result$values$variance_lower, variance_lower)))
 check("variance CI structured sd upper", isTRUE(all.equal(variance_ci_result$values$sd_upper, sqrt(variance_upper))))
-expect_error("one proportion CI rejects successes over n", env$onePropCI(12, 10, 0.95), "Successes x cannot be larger than n")
-expect_error("mean t CI rejects n under two", env$meanTCI(1, 10, 2, 0.95), "n must be a whole number at least 2")
+expect_error("one proportion CI rejects successes over n", onePropCI(12, 10, 0.95), "Successes x cannot be larger than n")
+expect_error("mean t CI rejects n under two", meanTCI(1, 10, 2, 0.95), "n must be a whole number at least 2")
 
-mean_z_test_result <- env$capture_calculator_result(env$meanKnownSigmaTest(25, 104, 100, 10, 0.05, "greater"))
+mean_z_test_result <- env$capture_calculator_result(meanKnownSigmaTest(25, 104, 100, 10, 0.05, "greater"))
 mean_z_stat <- (104 - 100) / (10 / sqrt(25))
 mean_z_p <- 1 - pnorm(mean_z_stat)
 check("mean known sigma test structured statistic", isTRUE(all.equal(mean_z_test_result$values$statistic, mean_z_stat)))
 check("mean known sigma test structured p value", isTRUE(all.equal(mean_z_test_result$values$p_value, mean_z_p)))
 check("mean known sigma test preserves legacy text", grepl("One Mean z Test", mean_z_test_result$output, fixed = TRUE))
 
-mean_t_test_result <- env$capture_calculator_result(env$meanTTest(16, 20, 18, 4, 0.05, "two.sided"))
+mean_t_test_result <- env$capture_calculator_result(meanTTest(16, 20, 18, 4, 0.05, "two.sided"))
 mean_t_stat <- (20 - 18) / (4 / sqrt(16))
 mean_t_p <- 2 * pt(-abs(mean_t_stat), 15)
 check("mean t test structured statistic", isTRUE(all.equal(mean_t_test_result$values$statistic, mean_t_stat)))
 check("mean t test structured p value", isTRUE(all.equal(mean_t_test_result$values$p_value, mean_t_p)))
 check("mean t test structured df", identical(mean_t_test_result$values$df, 15))
 
-one_prop_test_result <- env$capture_calculator_result(env$onePropTest(55, 100, 0.5, 0.05, "greater"))
+one_prop_test_result <- env$capture_calculator_result(onePropTest(55, 100, 0.5, 0.05, "greater"))
 one_prop_test_stat <- (0.55 - 0.5) / sqrt(0.5 * 0.5 / 100)
 one_prop_test_p <- 1 - pnorm(one_prop_test_stat)
 check("one proportion test structured statistic", isTRUE(all.equal(one_prop_test_result$values$statistic, one_prop_test_stat)))
 check("one proportion test structured p value", isTRUE(all.equal(one_prop_test_result$values$p_value, one_prop_test_p)))
-expect_error("mean known sigma test rejects bad alpha", env$meanKnownSigmaTest(25, 104, 100, 10, 1, "greater"), "Alpha must be greater than 0 and less than 1")
-expect_error("mean t test rejects n under two", env$meanTTest(1, 20, 18, 4, 0.05, "two.sided"), "n must be a whole number at least 2")
-expect_error("one proportion test rejects p0 boundary", env$onePropTest(5, 10, 1, 0.05, "greater"), "Hypothesized proportion must be greater than 0 and less than 1")
+expect_error("mean known sigma test rejects bad alpha", meanKnownSigmaTest(25, 104, 100, 10, 1, "greater"), "Alpha must be greater than 0 and less than 1")
+expect_error("mean t test rejects n under two", meanTTest(1, 20, 18, 4, 0.05, "two.sided"), "n must be a whole number at least 2")
+expect_error("one proportion test rejects p0 boundary", onePropTest(5, 10, 1, 0.05, "greater"), "Hypothesized proportion must be greater than 0 and less than 1")
 
 two_mean_known_result <- env$capture_calculator_result(
-  env$twoIndMeansKnownSigma(40, 52, 8, 35, 48, 7, conf_level = 0.95, alternative = "greater")
+  twoIndMeansKnownSigma(40, 52, 8, 35, 48, 7, conf_level = 0.95, alternative = "greater")
 )
 two_mean_diff <- 52 - 48
 two_mean_se <- sqrt(8^2 / 40 + 7^2 / 35)
@@ -228,7 +228,7 @@ check("two mean known sigma structured p value", isTRUE(all.equal(two_mean_known
 check("two mean known sigma preserves legacy text", grepl("Two Independent Means", two_mean_known_result$output, fixed = TRUE))
 
 two_prop_result <- env$capture_calculator_result(
-  env$twoIndSampleProp(x1 = 45, n1 = 100, x2 = 30, n2 = 90, conf_level = 0.95, alternative = "greater")
+  twoIndSampleProp(x1 = 45, n1 = 100, x2 = 30, n2 = 90, conf_level = 0.95, alternative = "greater")
 )
 p1 <- 45 / 100
 p2 <- 30 / 90
@@ -239,11 +239,11 @@ z_stat <- diff_p / se_test
 check("two proportion structured difference", isTRUE(all.equal(two_prop_result$values$difference, diff_p)))
 check("two proportion structured pooled", isTRUE(all.equal(two_prop_result$values$pooled_proportion, pooled)))
 check("two proportion structured p value", isTRUE(all.equal(two_prop_result$values$p_value, 1 - pnorm(z_stat))))
-expect_error("two mean known sigma rejects bad sigma", env$twoIndMeansKnownSigma(40, 52, 0, 35, 48, 7), "sigma1 must be greater than 0")
-expect_error("two proportion rejects successes over n", env$twoIndSampleProp(x1 = 12, n1 = 10, x2 = 3, n2 = 10), "Successes x1 cannot be larger than n1")
+expect_error("two mean known sigma rejects bad sigma", twoIndMeansKnownSigma(40, 52, 0, 35, 48, 7), "sigma1 must be greater than 0")
+expect_error("two proportion rejects successes over n", twoIndSampleProp(x1 = 12, n1 = 10, x2 = 3, n2 = 10), "Successes x1 cannot be larger than n1")
 
 uneq_result <- env$capture_calculator_result(
-  env$twoIndMeanUneqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "two.sided")
+  twoIndMeanUneqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "two.sided")
 )
 uneq_diff <- 20 - 17
 uneq_se <- sqrt(4^2 / 12 + 5^2 / 15)
@@ -255,7 +255,7 @@ check("unequal variance two mean structured p value", isTRUE(all.equal(uneq_resu
 check("unequal variance preserves legacy text", grepl("Unequal Variances", uneq_result$output, fixed = TRUE))
 
 eq_result <- env$capture_calculator_result(
-  env$twoIndMeansEqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "greater")
+  twoIndMeansEqVar(12, 20, 4, 15, 17, 5, conf_level = 0.95, alternative = "greater")
 )
 pooled_var <- (11 * 4^2 + 14 * 5^2) / (12 + 15 - 2)
 eq_se <- sqrt(pooled_var * (1 / 12 + 1 / 15))
@@ -263,11 +263,11 @@ eq_stat <- (20 - 17) / eq_se
 eq_p <- 1 - pt(eq_stat, 25)
 check("equal variance two mean structured pooled variance", isTRUE(all.equal(eq_result$values$pooled_variance, pooled_var)))
 check("equal variance two mean structured p value", isTRUE(all.equal(eq_result$values$p_value, eq_p)))
-expect_error("unequal variance rejects n under two", env$twoIndMeanUneqVar(1, 20, 4, 15, 17, 5), "n1 must be a whole number at least 2")
-expect_error("equal variance rejects bad sd", env$twoIndMeansEqVar(12, 20, 0, 15, 17, 5), "s1 must be greater than 0")
+expect_error("unequal variance rejects n under two", twoIndMeanUneqVar(1, 20, 4, 15, 17, 5), "n1 must be a whole number at least 2")
+expect_error("equal variance rejects bad sd", twoIndMeansEqVar(12, 20, 0, 15, 17, 5), "s1 must be greater than 0")
 
 gof_result <- env$capture_calculator_result(
-  env$chiSqGoodnessFit(c(18, 22, 20), expected_probs = c(1/3, 1/3, 1/3), alpha = 0.05, categories = c("A", "B", "C"))
+  chiSqGoodnessFit(c(18, 22, 20), expected_probs = c(1/3, 1/3, 1/3), alpha = 0.05, categories = c("A", "B", "C"))
 )
 gof_expected <- rep(20, 3)
 gof_stat <- sum((c(18, 22, 20) - gof_expected)^2 / gof_expected)
@@ -276,19 +276,19 @@ check("gof structured p value", isTRUE(all.equal(gof_result$values$p_value, 1 - 
 check("gof preserves legacy text", grepl("Chi-Square Goodness of Fit Test", gof_result$output, fixed = TRUE))
 
 observed_table <- matrix(c(10, 20, 30, 25, 15, 20), nrow = 2, byrow = TRUE)
-ind_result <- env$capture_calculator_result(env$chiSqIndependence(observed_table, alpha = 0.05))
+ind_result <- env$capture_calculator_result(chiSqIndependence(observed_table, alpha = 0.05))
 ind_expected <- outer(rowSums(observed_table), colSums(observed_table)) / sum(observed_table)
 ind_stat <- sum((observed_table - ind_expected)^2 / ind_expected)
 check("independence structured statistic", isTRUE(all.equal(ind_result$values$statistic, ind_stat)))
 check("independence structured df", isTRUE(all.equal(ind_result$values$df, 2)))
 check("independence structured p value", isTRUE(all.equal(ind_result$values$p_value, 1 - pchisq(ind_stat, 2))))
 
-hom_result <- env$capture_calculator_result(env$chiSqHomogeneity(observed_table, alpha = 0.05))
+hom_result <- env$capture_calculator_result(chiSqHomogeneity(observed_table, alpha = 0.05))
 check("homogeneity structured statistic", isTRUE(all.equal(hom_result$values$statistic, ind_stat)))
 check("homogeneity structured expected table", isTRUE(all.equal(hom_result$values$expected_table, ind_expected)))
-expect_error("gof rejects probability sum", env$chiSqGoodnessFit(c(10, 20), expected_probs = c(0.2, 0.2)), "Expected probabilities must add to 1")
-expect_error("chi-square rejects one-row table", env$chiSqIndependence(matrix(c(1, 2), nrow = 1)), "at least 2 rows and 2 columns")
-expect_error("chi-square rejects negative count", env$chiSqHomogeneity(matrix(c(1, -2, 3, 4), nrow = 2)), "nonnegative")
+expect_error("gof rejects probability sum", chiSqGoodnessFit(c(10, 20), expected_probs = c(0.2, 0.2)), "Expected probabilities must add to 1")
+expect_error("chi-square rejects one-row table", chiSqIndependence(matrix(c(1, 2), nrow = 1)), "at least 2 rows and 2 columns")
+expect_error("chi-square rejects negative count", chiSqHomogeneity(matrix(c(1, -2, 3, 4), nrow = 2)), "nonnegative")
 
 for (fn in c(
   "binomialDistribution", "poissonDistribution", "hypergeometricDistribution",
@@ -352,10 +352,10 @@ check("concept bold term class removed", !grepl("concept-term", ui_text, fixed =
 server_reference_text <- paste(readLines("R/server_reference.R", warn = FALSE), collapse = "\n")
 check("formula to concept link exists", grepl("Read related concept", server_reference_text, fixed = TRUE))
 
-two_z <- env$capture_calculator_result(env$twoIndMeansKnownSigma(50, 10.3911, 1, 50, 10, 1, alpha = 0.05))
+two_z <- env$capture_calculator_result(twoIndMeansKnownSigma(50, 10.3911, 1, 50, 10, 1, alpha = 0.05))
 check("two-mean z test uses unrounded z for p-value", abs(two_z$values$p_value - 2 * pnorm(-1.9555)) < 1e-9)
 check("two-mean z test decision follows exact p-value", identical(two_z$values$decision, "Fail to Reject"))
-left_t <- env$capture_calculator_result(env$twoIndMeansEqVar(10, 4, 1, 10, 5, 1, alpha = 0.05, alternative = "less"))
+left_t <- env$capture_calculator_result(twoIndMeansEqVar(10, 4, 1, 10, 5, 1, alpha = 0.05, alternative = "less"))
 check("left-tailed two-sample critical value is negative", left_t$values$critical_value < 0)
 check("legacy two-sample test defaults alpha", !inherits(try(capture.output(twoIndMeanUneqVar(10, 5, 1, 10, 4, 1)), silent = TRUE), "try-error"))
 
