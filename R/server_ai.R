@@ -482,13 +482,18 @@ register_ai_server <- function(input, output, session) {
   })
 
   # Setup guide: a pop-up that walks non-programmers through connecting an AI.
+  # Inline tags without the line breaks htmltools adds, so punctuation sits right after them.
+  b <- function(...) tags$b(..., .noWS = "outside")
+  code <- function(...) tags$code(..., .noWS = "outside")
+  kbd <- function(...) tags$kbd(..., .noWS = "outside")
+  link <- function(href, text) tags$a(href = href, target = "_blank", text, .noWS = "outside")
   open_terminal_step <- tags$li(
-    "Open a terminal. On a Mac press ", tags$kbd("Cmd"), " + ", tags$kbd("Space"),
-    ", type ", tags$b("Terminal"), ", and press Enter. On Windows open the Start menu and search for ",
-    tags$b("PowerShell"), "."
+    "Open a terminal. On a Mac press ", kbd("Cmd"), " + ", kbd("Space"),
+    ", type ", b("Terminal"), ", and press Enter. On Windows open the Start menu and search for ",
+    b("PowerShell"), "."
   )
   type_step <- function(command, after = NULL) {
-    tags$li("Type this and press Enter: ", tags$code(command), after)
+    tags$li("Type this and press Enter: ", code(command), after)
   }
 
   guide_steps <- function(choice) {
@@ -496,66 +501,66 @@ register_ai_server <- function(input, output, session) {
       ollama = tagList(
         tags$p("Ollama runs a free AI model on your own computer. Your questions never leave your machine. You need about 8 GB of memory (RAM) and a few GB of disk space."),
         tags$ol(
-          tags$li("Go to ", tags$a(href = "https://ollama.com/download", target = "_blank", "ollama.com/download"), ", download Ollama, and install it like any other app. Open it once; it then runs quietly in the background."),
+          tags$li("Go to ", link("https://ollama.com/download", "ollama.com/download"), ", download Ollama, and install it like any other app. Open it once; it then runs quietly in the background."),
           open_terminal_step,
           type_step("ollama pull llama3.2", " This downloads a small model (about 2 GB). Wait until it says success."),
-          tags$li("Click ", tags$b("Check my setup"), " below. When it says Ready, click ", tags$b("Use this"), ".")
+          tags$li("Click ", b("Check my setup"), " below. When it says Ready, click ", b("Use this"), ".")
         )
       ),
       codex_cli = tagList(
         tags$p("Codex is OpenAI's coding assistant. It uses your ChatGPT plan (Plus, Pro, Business, or Edu), so there is no API key to manage. Your questions are sent to OpenAI."),
         tags$ol(
-          tags$li("Install Node.js from ", tags$a(href = "https://nodejs.org", target = "_blank", "nodejs.org"), " (click the LTS download) if you have not already."),
+          tags$li("Install Node.js from ", link("https://nodejs.org", "nodejs.org"), " (click the LTS download) if you have not already."),
           open_terminal_step,
           type_step("npm install -g @openai/codex"),
           type_step("codex login", " A browser window opens. Sign in with your ChatGPT account, then come back."),
-          tags$li("Click ", tags$b("Check my setup"), " below. When it says Ready, click ", tags$b("Use this"), ".")
+          tags$li("Click ", b("Check my setup"), " below. When it says Ready, click ", b("Use this"), ".")
         )
       ),
       claude_code_cli = tagList(
         tags$p("Claude Code is Anthropic's coding assistant. It uses your Claude plan (Pro or Max), so there is no API key to manage. Your questions are sent to Anthropic."),
         tags$ol(
           open_terminal_step,
-          tags$li("Install it. On a Mac type ", tags$code("curl -fsSL https://claude.ai/install.sh | bash"),
-                  " and press Enter. On Windows (PowerShell) type ", tags$code("irm https://claude.ai/install.ps1 | iex"), " and press Enter."),
+          tags$li("Install it. On a Mac type ", code("curl -fsSL https://claude.ai/install.sh | bash"),
+                  " and press Enter. On Windows (PowerShell) type ", code("irm https://claude.ai/install.ps1 | iex"), " and press Enter."),
           type_step("claude", " Follow the sign-in steps in your browser. When you see the Claude prompt, type /exit and press Enter."),
-          tags$li("Close and reopen StatGuide so it can find the new command, then click ", tags$b("Check my setup"), ". When it says Ready, click ", tags$b("Use this"), ".")
+          tags$li("Close and reopen StatGuide so it can find the new command, then click ", b("Check my setup"), ". When it says Ready, click ", b("Use this"), ".")
         )
       ),
       local_server = tagList(
         tags$p("Use this if you run a model with LM Studio, llama.cpp, vLLM, or a similar app. Everything stays on your computer and no API key is needed."),
         tags$ol(
-          tags$li("Easiest option: install ", tags$a(href = "https://lmstudio.ai", target = "_blank", "LM Studio"), ", open it, and download a model from its search page."),
-          tags$li("In LM Studio open the ", tags$b("Developer"), " tab and turn on ", tags$b("Start server"), ". It listens at ", tags$code("http://localhost:1234/v1"), "."),
-          tags$li("Click ", tags$b("Check my setup"), " below. When it says Ready, click ", tags$b("Use this"), ". Then pick your model in AI Settings with ", tags$b("Load Available Models"), "."),
-          tags$li("Using a different app? Click ", tags$b("Use this"), " anyway and type that app's address in the Endpoint URL box.")
+          tags$li("Easiest option: install ", link("https://lmstudio.ai", "LM Studio"), ", open it, and download a model from its search page."),
+          tags$li("In LM Studio open the ", b("Developer"), " tab and turn on ", b("Start server"), ". It listens at ", code("http://localhost:1234/v1"), "."),
+          tags$li("Click ", b("Check my setup"), " below. When it says Ready, click ", b("Use this"), ". Then pick your model in AI Settings with ", b("Load Available Models"), "."),
+          tags$li("Using a different app? Click ", b("Use this"), " anyway and type that app's address in the Endpoint URL box.")
         )
       ),
       openai = tagList(
         tags$p("An API key lets the app talk to OpenAI directly. API use is billed per question by OpenAI, separately from a ChatGPT plan. Treat the key like a password: never paste it into this app, a chat, or a file you share."),
         tags$ol(
-          tags$li("Create a key at ", tags$a(href = "https://platform.openai.com/api-keys", target = "_blank", "platform.openai.com/api-keys"), " and copy it."),
-          tags$li("In the RStudio Console (or any R window) type ", tags$code('file.edit("~/.Renviron")'), " and press Enter. A file opens."),
-          tags$li("Add this line, with your key after the = sign, then save and close the file: ", tags$code("OPENAI_API_KEY=your-key-here")),
+          tags$li("Create a key at ", link("https://platform.openai.com/api-keys", "platform.openai.com/api-keys"), " and copy it."),
+          tags$li("In the RStudio Console (or any R window) type ", code('file.edit("~/.Renviron")'), " and press Enter. A file opens."),
+          tags$li("Add this line, with your key after the = sign, then save and close the file: ", code("OPENAI_API_KEY=your-key-here")),
           tags$li("Close and reopen StatGuide so it reads the key. This file lives in your home folder, not in the project, so it is never uploaded to GitHub."),
-          tags$li("Click ", tags$b("Check my setup"), ". When it says Ready, click ", tags$b("Use this"), " and choose a model in AI Settings with ", tags$b("Load Available Models"), ".")
+          tags$li("Click ", b("Check my setup"), ". When it says Ready, click ", b("Use this"), " and choose a model in AI Settings with ", b("Load Available Models"), ".")
         )
       ),
       anthropic = tagList(
         tags$p("An API key lets the app talk to Anthropic (Claude) directly. API use is billed per question by Anthropic, separately from a Claude plan. Treat the key like a password: never paste it into this app, a chat, or a file you share."),
         tags$ol(
-          tags$li("Create a key at ", tags$a(href = "https://console.anthropic.com/settings/keys", target = "_blank", "console.anthropic.com/settings/keys"), " and copy it."),
-          tags$li("In the RStudio Console (or any R window) type ", tags$code('file.edit("~/.Renviron")'), " and press Enter. A file opens."),
-          tags$li("Add this line, with your key after the = sign, then save and close the file: ", tags$code("ANTHROPIC_API_KEY=your-key-here")),
+          tags$li("Create a key at ", link("https://console.anthropic.com/settings/keys", "console.anthropic.com/settings/keys"), " and copy it."),
+          tags$li("In the RStudio Console (or any R window) type ", code('file.edit("~/.Renviron")'), " and press Enter. A file opens."),
+          tags$li("Add this line, with your key after the = sign, then save and close the file: ", code("ANTHROPIC_API_KEY=your-key-here")),
           tags$li("Close and reopen StatGuide so it reads the key. This file lives in your home folder, not in the project, so it is never uploaded to GitHub."),
-          tags$li("Click ", tags$b("Check my setup"), ". When it says Ready, click ", tags$b("Use this"), " and choose a model in AI Settings with ", tags$b("Load Available Models"), ".")
+          tags$li("Click ", b("Check my setup"), ". When it says Ready, click ", b("Use this"), " and choose a model in AI Settings with ", b("Load Available Models"), ".")
         )
       ),
       tagList(
         tags$p("No setup needed. The app writes a well-structured prompt that you can copy into any AI website, such as ChatGPT or Claude."),
         tags$ol(
-          tags$li("Click ", tags$b("Use this"), "."),
-          tags$li("In the Ask AI tab, type your question and click ", tags$b("Prepare AI Prompt"), "."),
+          tags$li("Click ", b("Use this"), "."),
+          tags$li("In the Ask AI tab, type your question and click ", b("Prepare AI Prompt"), "."),
           tags$li("Copy the prepared prompt into the AI website you use.")
         )
       )

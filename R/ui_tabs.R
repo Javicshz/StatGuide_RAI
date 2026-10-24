@@ -349,6 +349,11 @@ ui <- fluidPage(
       .markdown-numbered { margin: 4px 0; }
       pre.shiny-text-output { color: var(--midnight-text); white-space: pre-wrap; max-height: 650px; overflow-y: auto; background: var(--midnight-panel); border-color: var(--midnight-border); border-radius: 8px; box-shadow: var(--shadow-soft); }
       textarea { min-height: 90px; }
+      .modal-content { background: var(--midnight-panel); color: var(--midnight-text); border: 1px solid var(--midnight-border); }
+      .modal-header, .modal-footer { border-color: var(--midnight-border); }
+      .modal-header .close { color: var(--midnight-text); opacity: 0.8; text-shadow: none; }
+      .modal-content a { color: var(--sky-reflection); text-decoration: underline; }
+      .modal-content code, .modal-content kbd { background: var(--midnight-panel-soft); color: var(--midnight-text); }
       .formula-math { font-size: 1.15em; overflow-x: auto; overflow-y: hidden; padding: 2px 0; }
       .formula-math .katex-display { margin: 4px 0; }
       .formula-math .katex-display > .katex { text-align: left; }

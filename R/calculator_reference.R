@@ -79,7 +79,14 @@ render_concept_items <- function(items) {
   tags$div(
     class = "concept-list-clean",
     lapply(items, function(item) {
-      tags$p(class = "concept-prose", trimws(item %||% ""))
+      item <- trimws(item %||% "")
+      # Bold a leading "Term:" so readers can scan for the concept they need.
+      term <- regmatches(item, regexpr("^[^:.?!]{1,60}(?=: )", item, perl = TRUE))
+      if (length(term)) {
+        tags$p(class = "concept-prose", tags$strong(class = "concept-term", term, .noWS = "after"), substring(item, nchar(term) + 1))
+      } else {
+        tags$p(class = "concept-prose", item)
+      }
     })
   )
 }
