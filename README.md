@@ -100,12 +100,14 @@ This project is still in active development. The app runs locally, the calculato
 
 - R
 - Shiny
-- Optional: Ollama, Codex CLI, Claude Code CLI, or API credentials configured through environment variables.
+- For AI providers: the `curl` and `jsonlite` packages.
+- Optional: `mirai`, so the app stays responsive while waiting for an AI answer.
+- Optional: Ollama, Codex CLI, Claude Code CLI, a local OpenAI-compatible server (LM Studio, llama.cpp, vLLM), or API credentials configured through environment variables.
 
-Install Shiny if needed:
+Install the packages if needed:
 
 ```r
-install.packages("shiny")
+install.packages(c("shiny", "curl", "jsonlite", "mirai"))
 ```
 
 ## Run The App
@@ -145,7 +147,7 @@ codex("Provide the R code for a Poisson probability problem with lambda 2 and x 
 ollama("Explain Poisson lambda in R.")
 ```
 
-If a console helper needs setup, it will prompt you through the missing pieces. For example, `ollama()` can list installed local Ollama models when Ollama is running, and API helpers ask for model names, endpoints, environment variable names, and explicit send confirmation. The AI app must be open in the background for it to work.
+If a console helper needs setup, it will prompt you through the missing pieces. For example, `ollama()` can list installed local Ollama models when Ollama is running, and API helpers ask for model names, endpoints, environment variable names, and explicit send confirmation. The console helpers work on their own; the Shiny app does not need to be running.
 
 Available console AI helpers include:
 
@@ -175,6 +177,8 @@ openai_compatible(
 The console menu also has an Ask AI option with provider choices. Online providers require a typed confirmation before sending.
 
 ## AI Provider Setup
+
+Local OpenAI-compatible servers work through the "Generic OpenAI-compatible endpoint" provider. Use a `localhost` or `127.0.0.1` endpoint such as `http://localhost:1234/v1`; no API key or send approval is needed for those.
 
 See [AI-PROVIDER-SETUP.md](AI-PROVIDER-SETUP.md) for local CLI, Ollama, OpenAI-compatible API, and Anthropic/Claude setup notes.
 

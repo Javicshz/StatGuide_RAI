@@ -383,6 +383,52 @@ register_ai_server <- function(input, output, session) {
     ))
   })
 
+  # mirai (optional) runs the request in a background R process so the app stays
+  # responsive; without it the request runs in this session as before.
+  providers_file <- normalizePath(file.path(app_dir, "R", "ai_providers.R"))
+  ai_task <- ExtendedTask$new(function(prompt, task, question, context, settings) {
+    if (requireNamespace("mirai", quietly = TRUE)) {
+      mirai::mirai(
+        {
+          source(providers_file, local = TRUE)
+          send_ai_request(prompt, task, question, context, settings)
+        },
+        providers_file = providers_file,
+        prompt = prompt,
+        task = task,
+        question = question,
+        context = context,
+        settings = settings
+      )
+    } else {
+      send_ai_request(prompt, task, question, context, settings)
+    }
+  })
+  bslib::bind_task_button(ai_task, "ai_send")
+
+  observeEvent(input$ai_send, {
+    ai_task$invoke(
+      build_ai_prompt(
+        input$ai_task %||% "method",
+        input$ai_question %||% "",
+        input$ai_context %||% "",
+        input$ai_provider %||% "none",
+        isTRUE(input$ai_allow_external)
+      ),
+      input$ai_task %||% "method",
+      input$ai_question %||% "",
+      input$ai_context %||% "",
+      ai_provider_settings(
+        input$ai_provider %||% "none",
+        selected_ai_model(),
+        selected_ai_endpoint(),
+        input$ai_key_env %||% "",
+        input$ai_local_app %||% "",
+        isTRUE(input$ai_allow_external)
+      )
+    )
+  })
+
   output$ai_response <- renderUI({
     if (is.null(input$ai_send) || input$ai_send == 0) {
       return(tags$div(
@@ -392,36 +438,12 @@ register_ai_server <- function(input, output, session) {
       ))
     }
 
-    isolate({
-      prompt <- build_ai_prompt(
-        input$ai_task %||% "method",
-        input$ai_question %||% "",
-        input$ai_context %||% "",
-        input$ai_provider %||% "none",
-        isTRUE(input$ai_allow_external)
-      )
-
-      result <- send_ai_request(
-        prompt,
-        input$ai_task %||% "method",
-        input$ai_question %||% "",
-        input$ai_context %||% "",
-        ai_provider_settings(
-          input$ai_provider %||% "none",
-          selected_ai_model(),
-          selected_ai_endpoint(),
-          input$ai_key_env %||% "",
-          input$ai_local_app %||% "",
-          isTRUE(input$ai_allow_external)
-        )
-      )
-
-      tags$div(
-        class = "ai-response-wrapper",
-        tags$p(tags$strong("Status: "), result$status),
-        render_markdownish(result$message)
-      )
-    })
+    result <- ai_task$result()
+    tags$div(
+      class = "ai-response-wrapper",
+      tags$p(tags$strong("Status: "), result$status),
+      render_markdownish(result$message)
+    )
   })
 
   output$ai_local_guidance <- renderUI({

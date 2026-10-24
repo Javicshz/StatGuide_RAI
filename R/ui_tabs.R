@@ -21,7 +21,7 @@ ask_ai_tab <- tabPanel(
       ),
       checkboxInput("ai_allow_external", "I have reviewed this prompt and it is okay to send to the selected provider later", FALSE),
       actionButton("ai_prepare", "Prepare AI Prompt"),
-      actionButton("ai_send", "Ask AI")
+      bslib::input_task_button("ai_send", "Ask AI", label_busy = "Waiting for AI...")
     ),
     mainPanel(
       tags$h4("AI Workflow"),
