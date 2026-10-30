@@ -112,7 +112,7 @@ install.packages(c("shiny", "curl", "jsonlite", "mirai"))
 
 ## Quick Start (No Coding Needed)
 
-1. Install R from [cran.r-project.org](https://cran.r-project.org) if you do not have it yet.
+1. Install R from [R Studio]([https://cran.r-project.org](https://docs.posit.co/ide/user/download.html)) if you do not have it yet.
 2. Download this project: on GitHub click **Code**, then **Download ZIP**, and unzip it.
 3. Open the project folder and double-click the launcher:
    - Mac: **Start StatGuide.command**
